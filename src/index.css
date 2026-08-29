@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}
+
+.font-serif-title {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+.font-serif-body {
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+}
+
+.font-cinzel {
+  font-family: 'Cinzel', serif;
+}
+
+/* Reader's Digest Paper Texture & Styling */
+.digest-paper-bg {
+  background-color: #fbf8f3;
+  background-image: radial-gradient(#e5dfd3 0.75px, transparent 0.75px);
+  background-size: 20px 20px;
+}
+
+.digest-sepia-bg {
+  background-color: #f4ece1;
+  color: #3b2f2f;
+}
+
+.digest-classic-border {
+  border: 1px solid #e7dfd3;
+}
+
+.digest-drop-cap::first-letter {
+  float: left;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 3.8rem;
+  line-height: 0.8;
+  padding-top: 4px;
+  padding-right: 10px;
+  padding-bottom: 2px;
+  color: #8b1e1e;
+  font-weight: 700;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-page-break {
+    page-break-before: always;
+  }
+}
+
+/* Supporto per lo scrolling a tutto schermo su dispositivi mobili e Android */
+:fullscreen,
+:-webkit-full-screen {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  background-color: #1a130e;
+}
+

@@ -1,0 +1,8 @@
+{
+  "name": "Personal Digest",
+  "description": "Rivista digitale di approfondimento e curiosità in stile Reader's Digest personalizzata dai tuoi interessi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
