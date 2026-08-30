@@ -24,6 +24,11 @@ export interface Article {
   originalLanguage?: string;
   isCondensedBook?: boolean;
   imageUrl?: string;
+  artworkTitle?: string;
+  artworkArtist?: string;
+  artworkImageUrl?: string;
+  artworkYear?: string;
+  artworkMuseum?: string;
 }
 
 export interface InterestItem {

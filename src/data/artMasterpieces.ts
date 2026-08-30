@@ -792,22 +792,29 @@ Esposto al Museo Archeologico di Heraklion insieme agli affreschi di Cnosso e ai
 function findVerifiedDictionaryEntry(title: string = "", artist: string = "", text: string = "") {
   const query = `${title} ${artist} ${text}`.toLowerCase();
   
-  // 1. Cerca per titolo o parole chiave nel dizionario ad alta risoluzione
+  // 1. Cerca per titolo specifico dell'opera o parole chiave nel dizionario ad alta risoluzione
   for (const [key, item] of Object.entries(ART_IMAGE_DICTIONARY)) {
+    const itemTitleLower = (item.title || "").toLowerCase();
+    
+    // Verifica se il titolo specifico dell'opera (es. "notte stellata", "l'urlo") è presente nel testo
     if (
-      (item.title && query.includes(item.title.toLowerCase())) ||
-      (item.keywords && item.keywords.some((kw) => query.includes(kw.toLowerCase())))
+      (itemTitleLower.length > 4 && query.includes(itemTitleLower)) ||
+      (item.keywords && item.keywords.some((kw) => kw.length > 5 && query.includes(kw.toLowerCase())))
     ) {
       return item;
     }
   }
 
-  // 2. Cerca nel catalogo dei capolavori
-  const catMatch = ART_MASTERPIECES_CATALOG.find(
-    (m) =>
-      query.includes(m.artworkTitle.toLowerCase()) ||
-      (m.artist && query.includes(m.artist.toLowerCase().split(" ")[0]))
-  );
+  // 2. Cerca nel catalogo dei capolavori per titolo specifico dell'opera
+  const catMatch = ART_MASTERPIECES_CATALOG.find((m) => {
+    const artTitle = (m.artworkTitle || "").toLowerCase();
+    const shortTitle = (m.shortArtworkTitle || "").toLowerCase();
+    return (
+      (artTitle.length > 4 && query.includes(artTitle)) ||
+      (shortTitle.length > 4 && query.includes(shortTitle))
+    );
+  });
+
   if (catMatch) {
     return {
       title: catMatch.artworkTitle,
@@ -856,7 +863,7 @@ export function getProxiedImageUrl(url?: string | null, artist?: string, title?:
   return `/api/art/image-proxy?${params.toString()}`;
 }
 
-// Risolutore intelligente e dinamico che associa a QUALSIASI articolo d'arte o capolavoro l'esatta immagine e scheda critica (da Ricerca Web live o archivio)
+// Risolutore intelligente e dinamico che associa a QUALSIASI articolo d'arte o capolavoro l'esatta immagine e scheda critica
 export function getArtworkMetadataForArticle(
   article: Article,
   defaultMasterpiece?: ArtMasterpiece | null
@@ -906,35 +913,43 @@ export function getArtworkMetadataForArticle(
     };
   }
 
-  // Identifica il titolo e l'autore target dell'opera
-  const targetTitle = defaultMasterpiece?.artworkTitle || article.title || "";
-  const targetArtist = defaultMasterpiece?.artist || article.author || "";
-  const combinedText = `${article.title} ${article.excerpt || ""} ${article.content?.slice(0, 800) || ""} ${article.author || ""}`.toLowerCase();
-  const dictMatch = findVerifiedDictionaryEntry(targetTitle, targetArtist, combinedText);
+  // Priorità 0: Se l'articolo possiede già metadati di un'opera d'arte ben definiti
+  if (article.artworkTitle && article.artworkArtist) {
+    const imgUrl = sanitizeArtworkImageUrl(article.artworkImageUrl || article.imageUrl) || safeFallback;
+    return {
+      artworkTitle: article.artworkTitle,
+      artist: article.artworkArtist,
+      shortArtworkTitle: `${article.artworkArtist.toUpperCase()}: ${article.artworkTitle}`,
+      year: article.artworkYear || "Epoca Storica",
+      museum: article.artworkMuseum || "Collezione Museale / Archivio",
+      city: "",
+      artworkType: "Opera d'Arte Analizzata",
+      imageUrl: imgUrl,
+      fallbackImageUrl: imgUrl
+    };
+  }
 
-  // 1. Se l'articolo corrisponde direttamente a defaultMasterpiece
+  // Testo combinato per la ricerca
+  const combinedText = `${article.title} ${article.excerpt || ""} ${article.content?.slice(0, 800) || ""} ${article.author || ""}`.toLowerCase();
+
+  // Priorità 1: Se l'articolo è precisamente il Capolavoro in Copertina
   if (defaultMasterpiece) {
     const isDirectMatch =
       defaultMasterpiece.id === article.id ||
       defaultMasterpiece.article?.id === article.id ||
-      (defaultMasterpiece.artworkTitle && article.title.toLowerCase().includes(defaultMasterpiece.artworkTitle.toLowerCase().split(" ")[0])) ||
-      (defaultMasterpiece.artist && article.title.toLowerCase().includes(defaultMasterpiece.artist.toLowerCase().split(" ")[0])) ||
-      article.pageNumber === 1 ||
-      article.id.startsWith("arte-ispirazione-") ||
-      article.id.startsWith("capolavori-") ||
-      article.category === "Arte" ||
-      article.category === "Arte & Ispirazione";
+      (defaultMasterpiece.artworkTitle &&
+        defaultMasterpiece.artworkTitle.length > 4 &&
+        article.title.toLowerCase().includes(defaultMasterpiece.artworkTitle.toLowerCase()));
 
     if (isDirectMatch) {
       const isBotticelliMagi =
         defaultMasterpiece.artworkTitle?.toLowerCase().includes("adorazione") &&
         defaultMasterpiece.artist?.toLowerCase().includes("botticelli");
 
+      const dictMatch = findVerifiedDictionaryEntry(defaultMasterpiece.artworkTitle, defaultMasterpiece.artist);
       let finalImageUrl = sanitizeArtworkImageUrl(defaultMasterpiece.imageUrl || defaultMasterpiece.article?.imageUrl || article.imageUrl);
-      if ((!finalImageUrl || finalImageUrl === botticelliImage || finalImageUrl.includes("botticelli")) && !isBotticelliMagi) {
-        if (dictMatch?.url) {
-          finalImageUrl = dictMatch.url;
-        }
+      if ((!finalImageUrl || finalImageUrl === botticelliImage || finalImageUrl.includes("botticelli")) && !isBotticelliMagi && dictMatch) {
+        finalImageUrl = dictMatch.url;
       }
 
       const effectiveUrl = finalImageUrl || dictMatch?.url || botticelliImage;
@@ -956,21 +971,19 @@ export function getArtworkMetadataForArticle(
     }
   }
 
-  // 2. Corrispondenza nel catalogo ART_MASTERPIECES_CATALOG
-  const catalogMatch = ART_MASTERPIECES_CATALOG.find(
-    (m) =>
-      m.id === article.id ||
-      m.article?.id === article.id ||
-      article.title.toLowerCase().includes(m.artworkTitle.toLowerCase()) ||
-      (m.artist && article.title.toLowerCase().includes(m.artist.toLowerCase().split(" ")[0]))
-  );
+  // Priorità 2: Corrispondenza per Titolo Opera nel catalogo ART_MASTERPIECES_CATALOG
+  const catalogMatch = ART_MASTERPIECES_CATALOG.find((m) => {
+    if (m.id === article.id || m.article?.id === article.id) return true;
+    const mTitle = (m.artworkTitle || "").toLowerCase();
+    return mTitle.length > 4 && article.title.toLowerCase().includes(mTitle);
+  });
 
   if (catalogMatch) {
     const catalogImg = sanitizeArtworkImageUrl(catalogMatch.imageUrl || catalogMatch.article?.imageUrl || article.imageUrl);
     return {
       artworkTitle: catalogMatch.artworkTitle,
       artist: catalogMatch.artist,
-      shortArtworkTitle: catalogMatch.shortArtworkTitle,
+      shortArtworkTitle: catalogMatch.shortArtworkTitle || `${catalogMatch.artist}: ${catalogMatch.artworkTitle}`,
       year: catalogMatch.year,
       museum: catalogMatch.museum,
       city: catalogMatch.city,
@@ -978,12 +991,13 @@ export function getArtworkMetadataForArticle(
       matchingCategory: catalogMatch.matchingCategory,
       matchingTopic: catalogMatch.matchingTopic,
       whyConnected: catalogMatch.whyConnected,
-      imageUrl: catalogImg || botticelliImage,
-      fallbackImageUrl: catalogImg || botticelliImage
+      imageUrl: catalogImg || safeFallback,
+      fallbackImageUrl: catalogImg || safeFallback
     };
   }
 
-  // 3. Corrispondenza nel dizionario verificato
+  // Priorità 3: Corrispondenza nel dizionario verificato tramite titolo opera
+  const dictMatch = findVerifiedDictionaryEntry(article.title, article.author, combinedText);
   if (dictMatch) {
     return {
       artworkTitle: dictMatch.title,
@@ -998,23 +1012,27 @@ export function getArtworkMetadataForArticle(
     };
   }
 
-  // 4. Se l'articolo ha un'immagine diretta valida trovata tramite ricerca web
+  // Priorità 4: Se l'articolo possiede un'immagine valida del web
   const sanitizedArticleImg = sanitizeArtworkImageUrl(article.imageUrl);
   if (sanitizedArticleImg) {
+    const cleanedTitle = article.title
+      .replace(/^Capolavori dell'Umanità:\s*|«|»/gi, "")
+      .replace(/^Arte & Visioni:\s*/gi, "")
+      .trim();
     return {
-      artworkTitle: article.title.replace(/^Capolavori dell'Umanità:\s*|«|»/gi, "").split(" di ")[0] || article.title,
+      artworkTitle: cleanedTitle,
       artist: article.author || "Maestro dell'Arte",
-      shortArtworkTitle: article.shortTitle || article.title,
+      shortArtworkTitle: article.shortTitle || cleanedTitle,
       year: "Epoca Storica",
       museum: "Collezione Museale",
       city: "",
-      artworkType: "Disegno / Quadro / Opera d'Arte",
+      artworkType: "Opera d'Arte",
       imageUrl: sanitizedArticleImg,
-      fallbackImageUrl: dictMatch?.url || safeFallback
+      fallbackImageUrl: safeFallback
     };
   }
 
-  // 5. Fallback finale su Botticelli
+  // Priorità 5: Fallback finale
   return {
     artworkTitle: "L'Adorazione dei Magi",
     artist: "Sandro Botticelli",

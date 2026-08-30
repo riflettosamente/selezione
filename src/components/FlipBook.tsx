@@ -672,15 +672,13 @@ export default function FlipBook({
          p.article.id === currentMasterpiece.article?.id ||
          p.article.id === activeMasterpiece?.id ||
          p.article.id === activeMasterpiece?.article?.id ||
-         p.article.id?.startsWith("arte-ispirazione") ||
-         p.article.id?.startsWith("capolavori-") ||
-         p.article.category === "Arte" ||
-         p.article.category === "Arte & Ispirazione" ||
-         p.articleOriginalIndex === 0)
+         (currentMasterpiece.artworkTitle &&
+          currentMasterpiece.artworkTitle.length > 4 &&
+          p.article.title.toLowerCase().includes(currentMasterpiece.artworkTitle.toLowerCase())))
     );
     if (artPageIdx !== -1) return artPageIdx;
-    return articlePageMap[currentMasterpiece.id] ?? (articlePageMap[articles[0]?.id] ?? 1);
-  }, [pages, articlePageMap, currentMasterpiece, activeMasterpiece, articles]);
+    return articlePageMap[currentMasterpiece.id] ?? (articlePageMap[currentMasterpiece.article?.id || ""] ?? 1);
+  }, [pages, articlePageMap, currentMasterpiece, activeMasterpiece]);
 
   const regularArticles = useMemo(
     () =>
@@ -691,10 +689,6 @@ export default function FlipBook({
           a.id !== currentMasterpiece.article?.id &&
           a.id !== activeMasterpiece?.id &&
           a.id !== activeMasterpiece?.article?.id &&
-          !a.id?.startsWith("arte-ispirazione") &&
-          !a.id?.startsWith("capolavori-") &&
-          a.category !== "Arte" &&
-          a.category !== "Arte & Ispirazione" &&
           !a.id?.toLowerCase().includes("piu-parole") &&
           !a.id?.toLowerCase().includes("parola-giorno") &&
           !a.title?.toLowerCase().includes("più parole, più idee") &&
