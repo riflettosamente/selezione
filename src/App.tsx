@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import FlipBook from "./components/FlipBook";
 import { getMasterpieceForDayAndInterests, getArtworkMetadataForArticle, ArtMasterpiece } from "./data/artMasterpieces";
 import { DEFAULT_INTERESTS } from "./data/defaultInterests";
@@ -730,13 +730,27 @@ export default function App() {
   const [groundingQueries, setGroundingQueries] = useState<string[]>([]);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState<boolean>(false);
 
+  // Data corrente per la generazione e aggiornamento automatico alle ore 00:00
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+
+  // Controllo periodico per lo scocco della mezzanotte (ore 00:00) per generare i nuovi articoli del nuovo giorno
+  useEffect(() => {
+    const checkMidnight = () => {
+      const now = new Date();
+      if (now.toISOString().slice(0, 10) !== currentDate.toISOString().slice(0, 10)) {
+        setCurrentDate(now);
+      }
+    };
+    const interval = setInterval(checkMidnight, 30000);
+    return () => clearInterval(interval);
+  }, [currentDate]);
+
   // Mese, giorno e data del periodico giornaliero
   const { issueDateFormatted, articleDateFormatted, daySeed, todayKey } = useMemo(() => {
-    const now = new Date();
-    const dayOfWeek = now.toLocaleDateString("it-IT", { weekday: "long" });
-    const dayNum = now.getDate();
-    const month = now.toLocaleDateString("it-IT", { month: "long" });
-    const year = now.getFullYear();
+    const dayOfWeek = currentDate.toLocaleDateString("it-IT", { weekday: "long" });
+    const dayNum = currentDate.getDate();
+    const month = currentDate.toLocaleDateString("it-IT", { month: "long" });
+    const year = currentDate.getFullYear();
 
     // Es: "DOMENICA, 23 AGOSTO 2026"
     const capitalizedDay = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
@@ -745,10 +759,10 @@ export default function App() {
     return {
       issueDateFormatted: `${dayOfWeek.toUpperCase()}, ${dayNum} ${month.toUpperCase()} ${year}`,
       articleDateFormatted: `${capitalizedDay} ${dayNum} ${capitalizedMonth} ${year}`,
-      daySeed: getDailySeed(now),
-      todayKey: now.toISOString().slice(0, 10)
+      daySeed: getDailySeed(currentDate),
+      todayKey: currentDate.toISOString().slice(0, 10)
     };
-  }, []);
+  }, [currentDate]);
 
   // Interessi correnti dell'utente (piano editoriale personalizzato o predefinito)
   const [userInterests, setUserInterests] = useState<InterestItem[]>(() => {
@@ -876,75 +890,71 @@ export default function App() {
     return [];
   });
 
-  // Caricamento e ricerca live degli articoli del giorno tramite Google Search sul web
-  useEffect(() => {
-    let isMounted = true;
+  // Caricamento e ricerca live degli articoli del giorno generati per la data corrente (aggiornati ogni giorno alle 00:00)
+  const fetchLiveDailyArticles = useCallback(async () => {
     const { excludeIds, excludeTitles } = getExcludedHistoryFromDb();
-    const cacheKey = `personal_digest_web_articles_v5_${todayKey}_seed_${daySeed}_exc_${excludeIds.length}_int_${interestsSignature.length}`;
+    const cacheKey = `personal_digest_daily_articles_${todayKey}_int_${interestsSignature.length}`;
 
-    // Controlla cache locale
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setLiveWebArticles(parsed);
+          setIsSearchingWeb(false);
+          setSearchStatus("success");
           return;
         }
       }
     } catch {}
 
-    const fetchLiveDailyArticles = async () => {
-      setIsSearchingWeb(true);
-      setSearchStatus("searching");
-      try {
-        const res = await fetch("/api/articles/daily", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            interests: userInterests,
-            dateFormatted: articleDateFormatted,
-            seed: daySeed,
-            excludeIds,
-            excludeTitles
-          })
-        });
+    setIsSearchingWeb(true);
+    setSearchStatus("searching");
+    try {
+      const res = await fetch("/api/articles/daily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interests: userInterests,
+          dateFormatted: articleDateFormatted,
+          seed: daySeed,
+          excludeIds,
+          excludeTitles
+        })
+      });
 
-        if (res.status === 429) {
-          if (isMounted) setSearchStatus("quota_limited");
-        } else if (res.ok) {
-          const data = await res.json();
-          if (data?.quotaExceeded) {
-            if (isMounted) setSearchStatus("quota_limited");
-          } else if (data && Array.isArray(data.articles) && data.articles.length > 0 && isMounted) {
-            setLiveWebArticles(data.articles);
-            if (Array.isArray(data.webSearchQueries)) {
-              setGroundingQueries(data.webSearchQueries);
-            }
-            setSearchStatus("success");
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(data.articles));
-            } catch {}
-          } else if (isMounted) {
-            setSearchStatus("error");
+      if (res.status === 429) {
+        setSearchStatus("quota_limited");
+      } else if (res.ok) {
+        const data = await res.json();
+        if (data?.quotaExceeded) {
+          setSearchStatus("quota_limited");
+        } else if (data && Array.isArray(data.articles) && data.articles.length > 0) {
+          setLiveWebArticles(data.articles);
+          if (Array.isArray(data.webSearchQueries)) {
+            setGroundingQueries(data.webSearchQueries);
           }
-        } else if (isMounted) {
+          setSearchStatus("success");
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(data.articles));
+          } catch {}
+        } else {
           setSearchStatus("error");
         }
-      } catch (err) {
-        console.warn("Live web search fetch fallback:", err);
-        if (isMounted) setSearchStatus("error");
-      } finally {
-        if (isMounted) setIsSearchingWeb(false);
+      } else {
+        setSearchStatus("error");
       }
-    };
-
-    fetchLiveDailyArticles();
-
-    return () => {
-      isMounted = false;
-    };
+    } catch (err) {
+      console.warn("Live web search fetch fallback:", err);
+      setSearchStatus("error");
+    } finally {
+      setIsSearchingWeb(false);
+    }
   }, [daySeed, todayKey, userInterests, interestsSignature, articleDateFormatted]);
+
+  useEffect(() => {
+    fetchLiveDailyArticles();
+  }, [fetchLiveDailyArticles]);
 
   // Calcolo dinamico degli articoli del giorno combinando ricerca web e opera d'arte
   const articles = useMemo(() => {
