@@ -17,6 +17,43 @@ import {
   Clock
 } from "lucide-react";
 
+// Helper per pulire e formattare il testo degli articoli (rimozione ### e formattazione)
+const renderFormattedText = (text: string): React.ReactNode[] => {
+  if (!text) return [];
+  const clean = text.replace(/^#+\s*/, "").trim();
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(clean)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(clean.substring(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("**") && token.endsWith("**")) {
+      parts.push(
+        <strong key={match.index} className="font-bold text-stone-900">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      parts.push(
+        <em key={match.index} className="italic">
+          {token.slice(1, -1)}
+        </em>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < clean.length) {
+    parts.push(clean.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [clean];
+};
+
 interface DigestSectionsProps {
   sections: DigestSection[];
   fontSize: string;
@@ -165,11 +202,27 @@ export const DigestSections: React.FC<DigestSectionsProps> = ({
                       </p>
                     )}
 
-                    {/* Main Narrative Content (1-2 Rich Paragraphs) */}
+                    {/* Main Narrative Content */}
                     <div className={`font-serif-body text-stone-800 ${getTextSizeClass()} space-y-4`}>
-                      {article.content.split("\n\n").map((para, pIdx) => (
-                        <p key={pIdx}>{para}</p>
-                      ))}
+                      {(article.content || "")
+                        .replace(/([^\n])\n(###?\s+)/g, "$1\n\n$2")
+                        .replace(/(###?\s+[^\n]+)\n([^\n])/g, "$1\n\n$2")
+                        .split("\n\n")
+                        .filter((para) => para.trim().length > 0)
+                        .map((para, pIdx) => {
+                          const isHeader = /^#+\s*/.test(para.trim());
+                          if (isHeader) {
+                            return (
+                              <h4
+                                key={pIdx}
+                                className="font-serif-title font-bold text-lg sm:text-xl text-[#8b1e1e] mt-5 mb-2 border-b border-stone-200 pb-1"
+                              >
+                                {renderFormattedText(para)}
+                              </h4>
+                            );
+                          }
+                          return <p key={pIdx}>{renderFormattedText(para)}</p>;
+                        })}
                     </div>
 
                     {/* Spunto di Riflessione & Key Takeaway Box */}

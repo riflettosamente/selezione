@@ -32,6 +32,43 @@ import {
   Palette
 } from "lucide-react";
 
+// Helper per pulire e formattare il testo degli articoli (rimozione ###, sottotitoli e grassetti)
+const renderFormattedText = (text: string): React.ReactNode[] => {
+  if (!text) return [];
+  const clean = text.replace(/^#+\s*/, "").trim();
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(clean)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(clean.substring(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("**") && token.endsWith("**")) {
+      parts.push(
+        <strong key={match.index} className="font-bold text-[#1F1713]">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      parts.push(
+        <em key={match.index} className="italic">
+          {token.slice(1, -1)}
+        </em>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < clean.length) {
+    parts.push(clean.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [clean];
+};
+
 interface FlipBookProps {
   articles: Article[];
   activeMasterpiece?: ArtMasterpiece;
@@ -543,7 +580,11 @@ export default function FlipBook({
     );
 
     validStoryArticles.forEach((art, artIdx) => {
-      const allParagraphs = art.content.split("\n\n").filter((p) => p.trim().length > 0);
+      const rawContent = art.content || "";
+      const normalizedContent = rawContent
+        .replace(/([^\n])\n(###?\s+)/g, "$1\n\n$2")
+        .replace(/(###?\s+[^\n]+)\n([^\n])/g, "$1\n\n$2");
+      const allParagraphs = normalizedContent.split("\n\n").filter((p) => p.trim().length > 0);
       const isMasterpiece =
         art.category === "Arte" ||
         art.category === "Arte & Ispirazione" ||
@@ -782,6 +823,65 @@ export default function FlipBook({
     setTouchStartY(null);
   };
 
+  // Gestione trascinamento con mouse (Drag-to-flip)
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [dragStartY, setDragStartY] = useState<number | null>(null);
+  const [dragCurrentX, setDragCurrentX] = useState<number | null>(null);
+  const [isMouseDragging, setIsMouseDragging] = useState<boolean>(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isFlipping) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest("button") ||
+      target.closest("a") ||
+      target.closest("input") ||
+      target.closest("select") ||
+      target.closest("textarea")
+    ) {
+      return;
+    }
+    setDragStartX(e.clientX);
+    setDragStartY(e.clientY);
+    setDragCurrentX(e.clientX);
+    setIsMouseDragging(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (dragStartX === null || dragStartY === null) return;
+    const currentX = e.clientX;
+    const currentY = e.clientY;
+    const diffX = currentX - dragStartX;
+    const diffY = currentY - dragStartY;
+
+    if (Math.abs(diffX) > 10 && Math.abs(diffX) > Math.abs(diffY)) {
+      setIsMouseDragging(true);
+      setDragCurrentX(currentX);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (dragStartX !== null && dragCurrentX !== null && isMouseDragging) {
+      const diffX = dragStartX - dragCurrentX; // Positivo = trascinato verso sinistra (pagina successiva)
+      if (Math.abs(diffX) > 50) {
+        if (diffX > 0) {
+          nextPage();
+        } else {
+          prevPage();
+        }
+      }
+    }
+    setDragStartX(null);
+    setDragStartY(null);
+    setDragCurrentX(null);
+    setIsMouseDragging(false);
+  };
+
+  // Calcolo spostamento dinamico durante il trascinamento del foglio
+  const dragDeltaX = isMouseDragging && dragStartX !== null && dragCurrentX !== null ? dragCurrentX - dragStartX : 0;
+  const dragRotation = Math.min(Math.max((dragDeltaX / 600) * 12, -12), 12);
+  const dragTranslateX = Math.min(Math.max(dragDeltaX * 0.4, -100), 100);
+
   // Funzione dedicata infallibile per saltare alla pagina dell'opera d'arte / capolavoro
   const jumpToMasterpiece = () => {
     let pageIdx = pages.findIndex(
@@ -895,18 +995,52 @@ export default function FlipBook({
 
         {/* FOGLIO SINGOLO CON TEXTURE E OMBRA REALISTICA DA RIVISTA */}
         <div
-          className={`relative rounded-xl border-2 border-[#3A2E26]/40 transition-all duration-300 bg-[#FCFAF5] min-h-[580px] sm:min-h-[640px] flex flex-col justify-between overflow-y-auto ${
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className={`relative rounded-xl border-2 border-[#3A2E26]/40 transition-all duration-300 bg-[#FCFAF5] min-h-[700px] sm:min-h-[800px] lg:min-h-[880px] flex flex-col justify-between overflow-y-auto ${
+            isMouseDragging
+              ? "cursor-grabbing select-none"
+              : "cursor-grab"
+          } ${
             isFlipping
               ? flipDirection === "forward"
                 ? "translate-x-[-10px] scale-[0.98] rotate-[-1deg] shadow-lg opacity-85"
                 : "translate-x-[10px] scale-[0.98] rotate-[1deg] shadow-lg opacity-85"
+              : isMouseDragging
+              ? ""
               : "scale-100 shadow-2xl"
           }`}
           style={{
-            boxShadow:
-              "0 20px 35px -10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(58, 46, 38, 0.15), inset 0 0 35px rgba(210, 195, 175, 0.25)"
+            boxShadow: isMouseDragging
+              ? "0 30px 50px -5px rgba(0, 0, 0, 0.45), inset 0 0 45px rgba(210, 195, 175, 0.35)"
+              : "0 20px 35px -10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(58, 46, 38, 0.15), inset 0 0 35px rgba(210, 195, 175, 0.25)",
+            transform: isMouseDragging
+              ? `translateX(${dragTranslateX}px) rotate(${dragRotation}deg) scale(0.985)`
+              : undefined,
+            transition: isMouseDragging ? "none" : undefined
           }}
         >
+          {/* Zona Bordo Sinistro per Voltare Pagina col Mouse */}
+          {currentPageIndex > 0 && (
+            <div
+              onClick={prevPage}
+              className="absolute left-0 top-0 bottom-0 w-12 sm:w-16 z-30 cursor-pointer"
+              title="Pagina precedente"
+            />
+          )}
+
+          {/* Zona Bordo Destro per Voltare Pagina col Mouse */}
+          {currentPageIndex < totalPages - 1 && (
+            <div
+              onClick={nextPage}
+              className="absolute right-0 top-0 bottom-0 w-12 sm:w-16 z-30 cursor-pointer"
+              title="Pagina successiva"
+            />
+          )}
           {/* ======================================================== */}
           {/* CASO 1: COPERTINA STORICA & SOMMARIO */}
           {/* ======================================================== */}
@@ -977,7 +1111,7 @@ export default function FlipBook({
                 {/* Colonna Sinistra: Dipinto Storico Artistico */}
                 <div
                   onClick={jumpToMasterpiece}
-                  className={`md:col-span-5 relative ${palette.leftDarkBg} border-b md:border-b-0 md:border-r border-white/20 flex flex-col justify-between p-4 sm:p-5 overflow-hidden group cursor-pointer min-h-[240px] md:min-h-[460px]`}
+                  className={`md:col-span-5 relative ${palette.leftDarkBg} border-b md:border-b-0 md:border-r border-white/20 flex flex-col justify-between p-4 sm:p-5 overflow-hidden group cursor-pointer min-h-[260px] md:min-h-[560px]`}
                   title={isSearchingWeb ? "Selezione opera in corso..." : "Clicca per leggere l'articolo completo su quest'opera d'arte"}
                 >
                   {isSearchingWeb ? (
@@ -1441,27 +1575,48 @@ export default function FlipBook({
                   className="space-y-3.5 text-base sm:text-lg leading-relaxed text-[#2A201A] text-justify font-serif"
                   style={{ fontFamily: "'Lora', Georgia, serif" }}
                 >
-                  {currentPage.paragraphs.map((par, pIdx) => {
-                    const isLastParagraph = pIdx === currentPage.paragraphs.length - 1;
-                    const isContinuing = currentPage.sheetIndex < currentPage.totalSheets;
-
-                    return (
-                      <p
-                        key={pIdx}
-                        className={currentPage.sheetIndex === 1 && pIdx === 0 ? "digest-drop-cap" : ""}
-                      >
-                        {par}
-                        {isLastParagraph && isContinuing && (
-                          <span
-                            className="inline-flex items-center align-middle ml-2 text-[#8A2520] select-none"
-                            title="L'articolo continua alla pagina successiva"
-                          >
-                            <ArrowRight className="w-4 h-4 inline-block stroke-[2.5]" />
-                          </span>
-                        )}
-                      </p>
+                  {(() => {
+                    const firstBodyParagraphIndex = currentPage.paragraphs.findIndex(
+                      (p) => !/^#+\s*/.test(p.trim())
                     );
-                  })}
+
+                    return currentPage.paragraphs.map((par, pIdx) => {
+                      const isLastParagraph = pIdx === currentPage.paragraphs.length - 1;
+                      const isContinuing = currentPage.sheetIndex < currentPage.totalSheets;
+                      const isHeader = /^#+\s*/.test(par.trim());
+                      const isFirstBodyParagraph =
+                        currentPage.sheetIndex === 1 && pIdx === firstBodyParagraphIndex;
+
+                      if (isHeader) {
+                        return (
+                          <h3
+                            key={pIdx}
+                            className="font-serif-title text-lg sm:text-xl font-bold text-[#8A2520] mt-5 mb-2 leading-snug tracking-tight border-b border-[#8A2520]/20 pb-1 text-left"
+                            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                          >
+                            {renderFormattedText(par)}
+                          </h3>
+                        );
+                      }
+
+                      return (
+                        <p
+                          key={pIdx}
+                          className={isFirstBodyParagraph ? "digest-drop-cap" : ""}
+                        >
+                          {renderFormattedText(par)}
+                          {isLastParagraph && isContinuing && (
+                            <span
+                              className="inline-flex items-center align-middle ml-2 text-[#8A2520] select-none"
+                              title="L'articolo continua alla pagina successiva"
+                            >
+                              <ArrowRight className="w-4 h-4 inline-block stroke-[2.5]" />
+                            </span>
+                          )}
+                        </p>
+                      );
+                    });
+                  })()}
                 </div>
 
                 {/* Box Fonti Web Ufficiali nell'ultimo foglio dell'articolo */}
