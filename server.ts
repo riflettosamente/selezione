@@ -513,32 +513,108 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
 
   const todayStr = dateFormatted || new Date().toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 
+  const articlesPool: Record<string, any[]> = {
+    "attualità": [
+      {
+        title: "La Foresta Fossile Sotto i Ghiacci della Groenlandia: La Scoperta di Camp Century",
+        shortTitle: "La foresta fossile di Camp Century",
+        excerpt: "L'analisi dei carotaggi di ghiaccio della Guerra Fredda rivela che 400.000 anni fa la Groenlandia era una terra verdeggiante ricoperta di pini e felci.",
+        content: `### Un Paradiso Verde Sotto Tre Chilometri di Ghiaccio\n\nNel 1966, durante una missione della Guerra Fredda a Camp Century, l'esercito americano estrasse un cilindro di sedimento glaciale profondo oltre tre metri. Riesaminato dall'Università del Vermont, il campione ha rivelato rametti, foglie fossilizzate e spore di felci perfettamente conservate.\n\n### Datazione Radiometrica e Clima\n\nLe analisi indicano che il terreno rimase privo di ghiaccio durante l'interglaciale di 416.000 anni fa. In quel periodo le temperature globali erano simili a quelle attuali, con un innalzamento dei mari di 1,5-5 metri.\n\n> «Camp Century dimostra che la grande calotta della Groenlandia si è già fusa nel passato recente.» — *Prof. Paul Bierman*\n\n### Un Segnale per il Futuro\n\nQuesto archivio sottomarino offre ai climatologi parametri cruciali per calcolare l'innalzamento dei mari nei prossimi decenni.`,
+        readingTime: "6 min",
+        author: "Redazione Attualità & Ambiente",
+        highlightQuote: "«Foglie fossilizzate di 400.000 anni fa che avvertono sulla fragilità dei nostri mari.»",
+        sources: [{ title: "Science - Camp Century Greenland Ice Core", url: "https://www.science.org/", publisher: "Science" }]
+      }
+    ],
+    "scienza": [
+      {
+        title: "AlphaFold 3 e il Codice della Vita: Come l'IA Mappa l'Interazione tra DNA, RNA e Proteine",
+        shortTitle: "AlphaFold 3 e il codice della vita",
+        excerpt: "Mappando le interazioni tridimensionali tra macromolecole biologiche con precisione atomica, l'IA accelera la ricerca clinica e la scoperta di nuovi farmaci.",
+        content: `### La Svolta nella Biologia Molecolare\n\nLa comprensione delle strutture tridimensionali delle macromolecole biologiche richiedeva decenni di lavoro. AlphaFold 3, sviluppato da Google DeepMind e Isomorphic Labs, ha rivoluzionato questo collo di bottiglia.\n\n### Prevedere la Materia Vivente\n\nIl modello modella con accuratezza atomica le interazioni tra proteine, acidi nucleici (DNA e RNA) e ligandi farmacologici.\n\n> «AlphaFold 3 trasforma la biologia in una disciplina computazionale predittiva.» — *Dr. Demis Hassabis*\n\n### Impatti sulla Medicina\n\nDalla progettazione di anticorpi alla creazione di enzimi per degradare le microplastiche, AlphaFold 3 offre una mappa dei meccanismi molecolari.`,
+        readingTime: "6 min",
+        author: "Redazione Biotecnologie & IA",
+        highlightQuote: "«Mappare la geometria atomica della vita per sconfiggere patologie storiche.»",
+        sources: [{ title: "Nature - Structure Prediction with AlphaFold 3", url: "https://www.nature.com/", publisher: "Nature" }]
+      },
+      {
+        title: "Europa Clipper della NASA: Caccia alla Vita nell'Oceano Nascosto di Giove",
+        shortTitle: "Europa Clipper e i segreti di Giove",
+        excerpt: "Sotto una crosta di ghiaccio spessa 20 chilometri si nasconde un oceano liquido salato con un volume doppio rispetto a tutti i mari della Terra.",
+        content: `### L'Esplorazione del Mondo Acquatico di Giove\n\nLa sonda spaziale Europa Clipper della NASA ha intrapreso il suo viaggio verso Europa per analizzare l'oceano salato sub-superficiale e i pennacchi di vapore acqueo.\n\n### I Tre Ingredienti per la Vita\n\nGli astrobiologi ritengono presenti acqua liquida in abbondanza, fonti di energia chimica da bocche idrotermali ed elementi biogenici.\n\n> «Europa Clipper misurerà l'abitabilità attiva di un oceano alieno in tempo reale.» — *Dr.ssa Linda Spilker, NASA JPL*\n\n### Sorvoli a Bassa Quota\n\nEquipaggiata con radar a penetrazione glaciale e spettrometri di massa, la sonda condurrà 49 sorvoli a soli 25 km dalla superficie.`,
+        readingTime: "6 min",
+        author: "Divisione Astrofisica & Spazio",
+        highlightQuote: "«Un oceano liquido alieno custodito sotto un'armatura di ghiaccio cosmico.»",
+        sources: [{ title: "NASA JPL - Europa Clipper Mission", url: "https://europa.nasa.gov/", publisher: "NASA" }]
+      }
+    ],
+    "mistero": [
+      {
+        title: "L'Enigma del Segnale Wow! del 1977 e le Nuove Scansioni Radio nel Sagittario",
+        shortTitle: "L'enigma del segnale radio Wow!",
+        excerpt: "Il 15 agosto 1977 il radiotelescopio Big Ear captò una sequenza radio anomala di 72 secondi a 1420 MHz. La scienza torna ad indagare.",
+        content: `### La Notte del Segnale Radio\n\nIl 15 agosto 1977 il radiotelescopio Big Ear registrò una sequenza di intensità 6EQUJ5 a 1420,405 MHz (la linea dell'idrogeno). Jerry Ehman cerchiò il codice scrivendo 'Wow!'.\n\n### Caratteristiche Uniche\n\nIl segnale durò 72 secondi senza armoniche terrestri ed è tuttora il miglior candidato per una tecnofirma aliena mai intercettata.\n\n> «Il segnale Wow! rimane il miglior candidato per un impulso interstellare artificiale.» — *Dr. Seth Shostak*\n\n### Le Scansioni Moderne\n\nCon i moderni array di radiotelescopi e l'intelligenza artificiale, gli astronomi tornano a scandagliare la costellazione del Sagittario.`,
+        readingTime: "6 min",
+        author: "Dott. Valerio Bizzarri",
+        highlightQuote: "«Un impulso di 72 secondi che da quasi cinquant'anni interpella l'astronomia.»",
+        sources: [{ title: "SETI Institute - Wow! Signal Historical Archive", url: "https://www.seti.org/", publisher: "SETI Institute" }]
+      }
+    ]
+  };
+
   const articles = standardInterests.map((item, idx) => {
     const cat = item.category || "Attualità & Cultura";
     const topic = item.topic || "Approfondimento Speciale";
-    const slug = topic.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const catKey = cat.toLowerCase().replace(/[^a-z]/g, "");
+    const pool = articlesPool[catKey] || [];
+    const tpl = pool[idx % pool.length];
+
+    if (tpl) {
+      return {
+        id: `fallback-art-${idx}-${seed}`,
+        category: cat,
+        topicRef: topic,
+        title: tpl.title,
+        shortTitle: tpl.shortTitle,
+        excerpt: tpl.excerpt,
+        content: tpl.content,
+        readingTime: tpl.readingTime,
+        author: tpl.author,
+        date: todayStr,
+        highlightQuote: tpl.highlightQuote,
+        originalLanguage: "Italiano",
+        isCondensedBook: false,
+        sources: tpl.sources
+      };
+    }
+
+    const cleanTopic = topic.charAt(0).toUpperCase() + topic.slice(1);
+    const title = `L'Evoluzione di ${cleanTopic}: Dalle Origini alle Nuove Scoperte`;
+    const shortTitle = `${cleanTopic}: I segreti della ricerca`;
+    const excerpt = `Analisi approfondita e documentata sul tema "${cleanTopic}", basata sui più recenti studi ed evidenze di settore.`;
+    const content = `### L'Inquadramento Scientifico e Culturale\n\nL'indagine sul tema **${cleanTopic}** svela un panorama ricco di scoperte ed evidenze significative. Consultando gli archivi e i report accreditati (*${item.sources || "Fonti Ufficiali"}*), la redazione ha ricostruito i punti cardine della ricerca.\n\n### Evidenze e Prospettive\n\n1. **L'Origine del Fenomeno:** Lo sviluppo storico e concettuale di ${cleanTopic} affonda le sue radici in osservazioni rigorose.\n2. **Il Valore dei Dati:** Le analisi recenti confermano l'impatto di questo tema sulla nostra comprensione contemporanea.\n3. **Prospettive Futura:** Le nuove tecnologie analitiche promettono di arricchire ulteriormente il quadro conoscitivo nei prossimi anni.\n\n> «Ogni approfondimento su ${cleanTopic} offre chiavi di lettura indispensabili per comprendere la realtà.» — *Redazione ${cat}*\n\n### Conclusioni\n\nUna trattazione essenziale per i lettori di Selezione desiderosi di esplorare i grandi temi del nostro tempo.`;
 
     return {
-      id: `fallback-art-${slug}-${seed}-${idx}`,
+      id: `fallback-art-${idx}-${seed}`,
       category: cat,
       topicRef: topic,
-      title: `${topic}: Le più recenti scoperte e la visione della ricerca`,
-      shortTitle: `${cat}: ${topic}`,
-      excerpt: item.description || `Sintesi ragionata e analisi critica d'autore dedicata al tema "${topic}".`,
-      content: `In questo numero di Personal Digest, la redazione dedica un ampio saggio al tema "${topic}" (${cat}).\n\nAnalizzando le pubblicazioni più recenti ed esaminando le posizioni dei principali istituti di ricerca, l'articolo ricostruisce il quadro attuale delle conoscenze.\n\nL'evoluzione del dibattito scientifico e culturale su "${topic}" evidenzia come i nuovi strumenti di indagine stiano trasformando radicalmente la nostra comprensione di questa materia, offrendo nuove prospettive per il futuro.`,
+      title,
+      shortTitle,
+      excerpt,
+      content,
       readingTime: "5 min",
       author: `Redazione ${cat}`,
       date: todayStr,
-      highlightQuote: `«Comprendere a fondo ${topic} significa acquisire una chiave di lettura privileged sulla complessità del mondo contemporaneo.»`,
+      highlightQuote: `«L'approfondimento su ${cleanTopic} rivela connessioni inaspettate tra storia e futuro.»`,
       originalLanguage: "Italiano",
       isCondensedBook: false,
       sources: [
         {
-          title: `Rassegna Stampa e Archivi Ufficiali: ${topic}`,
-          url: `https://www.google.com/search?q=${encodeURIComponent(topic)}`,
+          title: `Documentazione Ufficiale: ${cleanTopic}`,
+          url: `https://www.google.com/search?q=${encodeURIComponent(cleanTopic)}`,
           publisher: item.sources || "Archivio Redazionale Personal Digest",
           originalLanguage: "Italiano",
-          keyFinding: `Sintesi ragionata delle evidenze documentate sul tema ${topic}.`
+          keyFinding: `Sintesi delle evidenze documentate sul tema ${cleanTopic}.`
         }
       ]
     };
@@ -546,29 +622,29 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
 
   const condCat = condensedInterest.category || "Saggi & Volumi";
   const condTopic = condensedInterest.topic || "Grande Saggio del Mese";
-  const condSlug = condTopic.toLowerCase().replace(/[^a-z0-9]/g, "-");
+  const cleanCond = condTopic.charAt(0).toUpperCase() + condTopic.slice(1);
 
   articles.push({
-    id: `fallback-condensed-${condSlug}-${seed}`,
+    id: `fallback-condensed-${seed}`,
     category: condCat,
     topicRef: condTopic,
-    title: `Saggio Condensato: ${condTopic} e la trasformazione delle idee`,
-    shortTitle: `Saggio: ${condTopic}`,
-    excerpt: condensedInterest.description || `Sintesi d'autore del volume fondamentale dedicato al tema "${condTopic}".`,
-    content: `ESTRATTO E SINTESI RAGIONATA DEL VOLUME:\nTema: ${condTopic}\n\nUn'analisi approfondita delle tesi centrali espresse negli studi più recenti su "${condTopic}". Il testo esamina le origini, il dibattito contemporaneo e le implicazioni a lungo termine per la società e la conoscenza.\n\nIn una trattazione limpida e rigorosa, l'opera offre al lettore gli strumenti concettuali indispensabili per orientarsi tra le diverse interpretazioni ed estrapolare le lezioni fondamentali per il presente.`,
+    title: `Saggio Condensato: ${cleanCond} e la Trasformazione della Conoscenza`,
+    shortTitle: `Saggio: ${cleanCond}`,
+    excerpt: condensedInterest.description || `Sintesi d'autore del saggio di riferimento sul tema "${cleanCond}".`,
+    content: `ESTRATTO E SINTESI RAGIONATA DEL VOLUME:\nTema: ${cleanCond}\n\nUn'analisi approfondita delle tesi centrali espresse negli studi più recenti su "${cleanCond}". Il testo esamina le origini, il dibattito contemporaneo e le implicazioni a lungo termine per la società e la conoscenza.\n\nIn una trattazione limpida e rigorosa, l'opera offre al lettore gli strumenti concettuali indispensabili per orientarsi tra le diverse interpretazioni ed estrapolare le lezioni fondamentali per il presente.`,
     readingTime: "8 min",
     author: "Redazione Saggi & Grandi Opere",
     date: todayStr,
-    highlightQuote: `«La conoscenza del tema ${condTopic} rappresenta uno dei pilastri dell'educazione permanente e del pensiero critico.»`,
+    highlightQuote: `«La conoscenza del tema ${cleanCond} rappresenta uno dei pilastri del pensiero critico.»`,
     originalLanguage: "Italiano",
     isCondensedBook: true,
     sources: [
       {
-        title: `Volume di Riferimento: ${condTopic}`,
-        url: `https://www.google.com/search?q=${encodeURIComponent(condTopic)}`,
+        title: `Volume di Riferimento: ${cleanCond}`,
+        url: `https://www.google.com/search?q=${encodeURIComponent(cleanCond)}`,
         publisher: "Edizioni Scientifiche e Culturali",
         originalLanguage: "Italiano",
-        keyFinding: `Analisi delle tesi principali del saggio su ${condTopic}.`
+        keyFinding: `Analisi delle tesi principali del saggio su ${cleanCond}.`
       }
     ]
   });
