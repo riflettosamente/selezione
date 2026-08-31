@@ -1084,7 +1084,21 @@ export function getMasterpieceForDayAndInterests(
         title: `Arte & Visioni: ${item.title} di ${item.artist} (${item.year})`,
         shortTitle: `Arte: ${item.artist} — ${item.title.slice(0, 30)}`,
         excerpt: `Conservato presso ${item.museum} a ${item.city}: il capolavoro d'arte d'autore che dialoga con la sensibilità e gli interessi del lettore.`,
-        content: `SCHEDA CRITICA DELL'OPERA:\nTitolo: ${item.title}\nAutore: ${item.artist}\nAnno: ${item.year}\nMuseo: ${item.museum} (${item.city})\n\n1. CONTESTO STORICO E VISIONE:\nUn'opera iconica che incarna la ricerca estetica e concettuale dell'umanità. Conservata presso ${item.museum}, l'opera di ${item.artist} rappresenta una pietra miliare della storia dell'arte.\n\n2. COMPOSIZIONE E SIMBOLISMO:\nIl linguaggio visivo e il segno grafico dell'artista creano un ponte ideale con i temi dell'ingegno umano e della bellezza formale.\n\n3. RISONANZA CONTEMPORANEA:\nIn questo numero di Personal Digest, l'opera viene proposta come riflessione visiva in sintonia con le passioni e gli interessi personali del lettore.`,
+        content: `### Il Contesto Storico e la Visione dell'Autore
+
+L'opera "${item.title}", realizzata da ${item.artist} nel ${item.year}, rappresenta una delle testimonianze più affascinanti della storia dell'arte mondiale. Conservata e custodita presso ${item.museum} a ${item.city}, la tela esprime la straordinaria sensibilità stilistica e la padronanza tecnica dell'autore.
+
+![${item.title}](${item.url})
+
+### Composizione, Tecnica e Simbolismo
+
+L'articolazione della scena, la scelta della palette cromatica e l'equilibrio della composizione testimoniano il profondo dialogo tra forma e significato. Ogni dettaglio dell'opera di ${item.artist} nasconde un preciso messaggio simbolico, volto a guidare lo spettatore attraverso una riflessione sia estetica che filosofica.
+
+> «${item.title} rimane una gemma preziosa della collezione di ${item.museum}, capace di emozionare e ispirare studiosi e appassionati di ogni epoca.»
+
+### L'Eredità nei Grandi Musei
+
+Oggi l'opera continua ad attirare visitatori da tutto il mondo a ${item.city}, confermandosi un punto di riferimento imprescindibile per la comprensione della corrente artistica di appartenenza e un patrimonio culturale inestimabile per l'umanità.`,
         readingTime: "5 min",
         author: "Redazione Arte & Grandi Musei",
         date: "Oggi",

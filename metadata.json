@@ -1,6 +1,6 @@
 {
-  "name": "Personal Digest",
-  "description": "Rivista digitale di approfondimento e curiosità in stile Reader's Digest personalizzata dai tuoi interessi.",
+  "name": "Selezione",
+  "description": "Rivista digitale di approfondimento e curiosità in stile Selezione / Reader's Digest personalizzata sui tuoi interessi.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

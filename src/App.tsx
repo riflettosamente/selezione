@@ -3,6 +3,7 @@ import FlipBook from "./components/FlipBook";
 import { getMasterpieceForDayAndInterests, getArtworkMetadataForArticle, ArtMasterpiece } from "./data/artMasterpieces";
 import { DEFAULT_INTERESTS } from "./data/defaultInterests";
 import { InterestItem } from "./types";
+import { generateFreshDailyArticles } from "./services/dailyArticleGenerator";
 import {
   isArticlePresentInDb,
   registerArticlesInDb,
@@ -37,8 +38,9 @@ export interface Article {
   isCondensedBook?: boolean;
 }
 
-// Catalogo degli articoli autentici ispirato allo stile "Selezione dal Reader's Digest"
-const REAL_ARTICLES_CATALOG: Article[] = [
+// Catalogo dinamico: non viene più usata alcuna cache statica di articoli
+const REAL_ARTICLES_CATALOG: Article[] = [];
+const UNUSED_LEGACY_CATALOG: Article[] = [
   {
     id: "gobekli-tepe-unesco",
     pageNumber: 1,
@@ -595,7 +597,7 @@ Questo flusso notturno elimina con straordinaria efficienza le proteine neurotos
 ];
 
 // Catalogo di base autentico
-const MASTER_ARTICLES_CATALOG: Article[] = REAL_ARTICLES_CATALOG;
+const MASTER_ARTICLES_CATALOG: Article[] = [];
 
 // Algoritmo di shuffle pseudocasuale deterministico basato su seed
 function seededShuffle<T>(array: T[], seed: number): T[] {
@@ -620,46 +622,6 @@ function getDailySeed(date: Date = new Date()): number {
   return Math.floor(diff / oneDay) + date.getFullYear();
 }
 
-function generateDynamicArticlesFromInterests(
-  userInterests: InterestItem[],
-  daySeed: number,
-  dateFormatted: string,
-  coverStoryId: string
-): Article[] {
-  const active = (userInterests && userInterests.length > 0 ? userInterests : DEFAULT_INTERESTS).filter((i) => i.enabled !== false);
-  const items = active.slice(0, 9);
-
-  return items.map((item, idx) => {
-    const isCondensed = idx === items.length - 1;
-    const cat = item.category || "Cultura & Scienza";
-    const topic = item.topic || "Approfondimento Quotidiano";
-    const slug = topic.toLowerCase().replace(/[^a-z0-9]/g, "-");
-
-    return {
-      id: `dyn-art-${slug}-${daySeed}-${idx}`,
-      pageNumber: idx + 2,
-      category: cat,
-      topicRef: topic,
-      title: `${topic}: Le più recenti scoperte e la visione della ricerca`,
-      shortTitle: `${cat}: ${topic}`,
-      excerpt: item.description || `Sintesi d'autore ed esame delle fonti sul tema "${topic}".`,
-      content: `In questa edizione di Personal Digest, la redazione propone una disamina approfondita sul tema "${topic}" (${cat}).\n\nAttraverso la consultazione delle fonti accreditate (${item.sources || "Archivio Internazionale"}), analizziamo il quadro attuale della ricerca e le sue implicazioni storiche e scientifiche.\n\nL'evoluzione del dibattito attorno a "${topic}" mostra la straordinaria vitalità di questa disciplina, offrendo spunti di riflessione e chiavi d'interpretazione indispensabili per il lettore.`,
-      readingTime: "5 min",
-      author: `Redazione ${cat}`,
-      date: dateFormatted,
-      highlightQuote: `«L'indagine su ${topic} unisce rigore analitico e meraviglia conoscitiva.»`,
-      originalLanguage: "Italiano",
-      isCondensedBook: isCondensed,
-      sources: item.sources ? item.sources.split(",").map(s => ({
-        title: `Fonte ufficiale: ${s.trim()}`,
-        url: "https://www.google.com/search?q=" + encodeURIComponent(s.trim() + " " + topic),
-        publisher: s.trim(),
-        originalLanguage: "Italiano"
-      })) : []
-    };
-  });
-}
-
 function computeDailyArticles(
   daySeed: number,
   masterpiece: ArtMasterpiece,
@@ -668,14 +630,12 @@ function computeDailyArticles(
   liveWebArticles: Article[] = [],
   userInterests: InterestItem[] = []
 ): Article[] {
-  // Capolavoro d'arte di oggi legato agli interessi del Foglio Google
+  // Capolavoro d'arte di oggi
   const coverStory = masterpiece.article;
   const storageDb = getArticlesStorageDb();
 
   let baseArticles: Article[] = [];
   if (liveWebArticles && liveWebArticles.length > 0) {
-    // Verifica ogni articolo restituito dal live search; se uno fosse un duplicato già presente nel database,
-    // cerca un sostituto nei temi dell'utente
     const verified: Article[] = [];
     const usedIds = new Set<string>([coverStory.id]);
 
@@ -690,8 +650,8 @@ function computeDailyArticles(
     }
     baseArticles = verified;
   } else {
-    // Generazione dinamica basata 1:1 sugli interessi attivi dell'utente per evitare ripetizioni di articoli statici
-    baseArticles = generateDynamicArticlesFromInterests(userInterests, daySeed, dateFormatted, coverStory.id);
+    // Generazione dinamica quotidiana basata 1:1 sugli interessi attivi dell'utente (senza cache di articoli sintetici)
+    baseArticles = generateFreshDailyArticles(userInterests, daySeed, dateFormatted, coverStory.id);
   }
 
   // Unione: Capolavoro d'Arte + Articoli del Sommario + Eventuali Articoli personalizzati
@@ -872,7 +832,7 @@ export default function App() {
       if (saved) {
         const parsed: Article[] = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((a) => !REAL_ARTICLES_CATALOG.some((c) => c.id === a.id));
+          return parsed;
         }
       }
     } catch {}

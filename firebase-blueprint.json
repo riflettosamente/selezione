@@ -1,0 +1,18 @@
+{
+  "entities": {
+    "favorites": {
+      "title": "User Favorites",
+      "description": "Art, articles, and recommendations saved by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category", "createdAt"]
+    }
+  }
+}
