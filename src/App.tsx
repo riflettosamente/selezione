@@ -620,12 +620,53 @@ function getDailySeed(date: Date = new Date()): number {
   return Math.floor(diff / oneDay) + date.getFullYear();
 }
 
+function generateDynamicArticlesFromInterests(
+  userInterests: InterestItem[],
+  daySeed: number,
+  dateFormatted: string,
+  coverStoryId: string
+): Article[] {
+  const active = (userInterests && userInterests.length > 0 ? userInterests : DEFAULT_INTERESTS).filter((i) => i.enabled !== false);
+  const items = active.slice(0, 9);
+
+  return items.map((item, idx) => {
+    const isCondensed = idx === items.length - 1;
+    const cat = item.category || "Cultura & Scienza";
+    const topic = item.topic || "Approfondimento Quotidiano";
+    const slug = topic.toLowerCase().replace(/[^a-z0-9]/g, "-");
+
+    return {
+      id: `dyn-art-${slug}-${daySeed}-${idx}`,
+      pageNumber: idx + 2,
+      category: cat,
+      topicRef: topic,
+      title: `${topic}: Le più recenti scoperte e la visione della ricerca`,
+      shortTitle: `${cat}: ${topic}`,
+      excerpt: item.description || `Sintesi d'autore ed esame delle fonti sul tema "${topic}".`,
+      content: `In questa edizione di Personal Digest, la redazione propone una disamina approfondita sul tema "${topic}" (${cat}).\n\nAttraverso la consultazione delle fonti accreditate (${item.sources || "Archivio Internazionale"}), analizziamo il quadro attuale della ricerca e le sue implicazioni storiche e scientifiche.\n\nL'evoluzione del dibattito attorno a "${topic}" mostra la straordinaria vitalità di questa disciplina, offrendo spunti di riflessione e chiavi d'interpretazione indispensabili per il lettore.`,
+      readingTime: "5 min",
+      author: `Redazione ${cat}`,
+      date: dateFormatted,
+      highlightQuote: `«L'indagine su ${topic} unisce rigore analitico e meraviglia conoscitiva.»`,
+      originalLanguage: "Italiano",
+      isCondensedBook: isCondensed,
+      sources: item.sources ? item.sources.split(",").map(s => ({
+        title: `Fonte ufficiale: ${s.trim()}`,
+        url: "https://www.google.com/search?q=" + encodeURIComponent(s.trim() + " " + topic),
+        publisher: s.trim(),
+        originalLanguage: "Italiano"
+      })) : []
+    };
+  });
+}
+
 function computeDailyArticles(
   daySeed: number,
   masterpiece: ArtMasterpiece,
   customArticles: Article[] = [],
   dateFormatted: string,
-  liveWebArticles: Article[] = []
+  liveWebArticles: Article[] = [],
+  userInterests: InterestItem[] = []
 ): Article[] {
   // Capolavoro d'arte di oggi legato agli interessi del Foglio Google
   const coverStory = masterpiece.article;
@@ -634,7 +675,7 @@ function computeDailyArticles(
   let baseArticles: Article[] = [];
   if (liveWebArticles && liveWebArticles.length > 0) {
     // Verifica ogni articolo restituito dal live search; se uno fosse un duplicato già presente nel database,
-    // cerca un sostituto nel catalogo esteso non ancora presente nel database
+    // cerca un sostituto nei temi dell'utente
     const verified: Article[] = [];
     const usedIds = new Set<string>([coverStory.id]);
 
@@ -643,55 +684,14 @@ function computeDailyArticles(
         usedIds.add(art.id);
         verified.push(art);
       } else {
-        // Cerca sostituto non presente nel database
-        const isCondensed = Boolean(art.isCondensedBook);
-        const pool = MASTER_ARTICLES_CATALOG.filter(c => Boolean(c.isCondensedBook) === isCondensed);
-        let replacement = pool.find(c => !isArticlePresentInDb(c, storageDb) && !usedIds.has(c.id));
-        if (!replacement) {
-          replacement = pool.find(c => !usedIds.has(c.id)) || art;
-        }
-        usedIds.add(replacement.id);
-        verified.push(replacement);
+        usedIds.add(art.id);
+        verified.push(art);
       }
     }
     baseArticles = verified;
   } else {
-    // Selezione deterministica dal catalogo con esclusione rigida dei duplicati nel DB
-    const regularPool = MASTER_ARTICLES_CATALOG.filter((a) => !a.isCondensedBook && a.id !== coverStory.id);
-    const condensedPool = MASTER_ARTICLES_CATALOG.filter((a) => a.isCondensedBook);
-
-    const shuffledRegular = seededShuffle(regularPool, daySeed);
-    const selectedRegular: Article[] = [];
-
-    // Ricerca continua finché non trova 8 articoli non presenti nel database
-    for (let i = 0; i < shuffledRegular.length && selectedRegular.length < 8; i++) {
-      const cand = shuffledRegular[i];
-      if (!isArticlePresentInDb(cand, storageDb) && !selectedRegular.some(s => s.id === cand.id)) {
-        selectedRegular.push(cand);
-      }
-    }
-    // Se il catalogo ha meno articoli inediti di 8, completa con i rimanenti
-    if (selectedRegular.length < 8) {
-      for (let i = 0; i < shuffledRegular.length && selectedRegular.length < 8; i++) {
-        const cand = shuffledRegular[i];
-        if (!selectedRegular.some(s => s.id === cand.id)) {
-          selectedRegular.push(cand);
-        }
-      }
-    }
-
-    const shuffledCondensed = seededShuffle(condensedPool, daySeed * 13 + 7);
-    let selectedCondensed: Article | null = null;
-    for (let i = 0; i < shuffledCondensed.length; i++) {
-      const cand = shuffledCondensed[i];
-      if (!isArticlePresentInDb(cand, storageDb)) {
-        selectedCondensed = cand;
-        break;
-      }
-    }
-    if (!selectedCondensed) selectedCondensed = shuffledCondensed[0];
-
-    baseArticles = [...selectedRegular, selectedCondensed];
+    // Generazione dinamica basata 1:1 sugli interessi attivi dell'utente per evitare ripetizioni di articoli statici
+    baseArticles = generateDynamicArticlesFromInterests(userInterests, daySeed, dateFormatted, coverStory.id);
   }
 
   // Unione: Capolavoro d'Arte + Articoli del Sommario + Eventuali Articoli personalizzati
@@ -785,29 +785,20 @@ export default function App() {
 
   const [liveMasterpiece, setLiveMasterpiece] = useState<ArtMasterpiece | null>(null);
 
-  // Caricamento del capolavoro d'arte tramite Ricerca Web Live con Google Search
+  // Caricamento del capolavoro d'arte tramite Ricerca Web Live con Google Search (senza cache)
   useEffect(() => {
     let isMounted = true;
-    const artCacheKey = `personal_digest_art_web_v11_${todayKey}_seed_${daySeed}_int_${interestsSignature.length}`;
 
+    // Pulizia di eventuali vecchie chiavi di cache per l'arte da localStorage
     try {
-      const cached = localStorage.getItem(artCacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && parsed.artworkTitle && parsed.article) {
-          const meta = getArtworkMetadataForArticle(parsed.article, parsed);
-          setLiveMasterpiece({
-            ...parsed,
-            imageUrl: meta.imageUrl,
-            article: {
-              ...parsed.article,
-              imageUrl: meta.imageUrl
-            }
-          });
-          return;
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("personal_digest_art_web_")) {
+          localStorage.removeItem(key);
         }
-      }
+      });
     } catch {}
+
+    setLiveMasterpiece(null);
 
     const fetchLiveMasterpiece = async () => {
       try {
@@ -820,6 +811,7 @@ export default function App() {
             seed: daySeed,
             excludeArtworks,
             excludeArtists,
+            forceRefresh: true
           }),
         });
         if (res.ok) {
@@ -835,9 +827,6 @@ export default function App() {
               }
             };
             setLiveMasterpiece(verifiedMasterpiece);
-            try {
-              localStorage.setItem(artCacheKey, JSON.stringify(verifiedMasterpiece));
-            } catch {}
           }
         }
       } catch (err) {
@@ -849,7 +838,7 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [daySeed, todayKey, userInterests, interestsSignature]);
+  }, [daySeed, userInterests]);
 
   // Capolavoro d'arte del giorno selezionato (priorità assoluta alla Ricerca Web live)
   const activeMasterpiece = useMemo(() => {
@@ -891,25 +880,23 @@ export default function App() {
   });
 
   // Caricamento e ricerca live degli articoli del giorno generati per la data corrente (aggiornati ogni giorno alle 00:00)
+  // Eliminazione completa della cache di sistema per garantire che ad ogni riapertura o nuovo giorno vengano generati esclusivamente i nuovi articoli
   const fetchLiveDailyArticles = useCallback(async () => {
     const { excludeIds, excludeTitles } = getExcludedHistoryFromDb();
-    const cacheKey = `personal_digest_daily_articles_${todayKey}_int_${interestsSignature.length}`;
 
+    // Pulizia di eventuali vecchie chiavi di cache degli articoli da localStorage
     try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setLiveWebArticles(parsed);
-          setIsSearchingWeb(false);
-          setSearchStatus("success");
-          return;
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("personal_digest_daily_articles_") || key.startsWith("personal_digest_art_web_")) {
+          localStorage.removeItem(key);
         }
-      }
+      });
     } catch {}
 
     setIsSearchingWeb(true);
     setSearchStatus("searching");
+    setLiveWebArticles([]);
+
     try {
       const res = await fetch("/api/articles/daily", {
         method: "POST",
@@ -919,7 +906,8 @@ export default function App() {
           dateFormatted: articleDateFormatted,
           seed: daySeed,
           excludeIds,
-          excludeTitles
+          excludeTitles,
+          forceRefresh: true
         })
       });
 
@@ -935,9 +923,6 @@ export default function App() {
             setGroundingQueries(data.webSearchQueries);
           }
           setSearchStatus("success");
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(data.articles));
-          } catch {}
         } else {
           setSearchStatus("error");
         }
@@ -950,7 +935,7 @@ export default function App() {
     } finally {
       setIsSearchingWeb(false);
     }
-  }, [daySeed, todayKey, userInterests, interestsSignature, articleDateFormatted]);
+  }, [daySeed, userInterests, articleDateFormatted]);
 
   useEffect(() => {
     fetchLiveDailyArticles();
@@ -958,15 +943,15 @@ export default function App() {
 
   // Calcolo dinamico degli articoli del giorno combinando ricerca web e opera d'arte
   const articles = useMemo(() => {
-    return computeDailyArticles(daySeed, activeMasterpiece, customArticles, articleDateFormatted, liveWebArticles);
-  }, [daySeed, activeMasterpiece, customArticles, articleDateFormatted, liveWebArticles]);
+    return computeDailyArticles(daySeed, activeMasterpiece, customArticles, articleDateFormatted, liveWebArticles, userInterests);
+  }, [daySeed, activeMasterpiece, customArticles, articleDateFormatted, liveWebArticles, userInterests]);
 
   // Registra gli articoli renderizzati nel database storico per prevenire duplicazioni future
   useEffect(() => {
-    if (articles && articles.length > 0) {
+    if (liveWebArticles && liveWebArticles.length > 0 && articles && articles.length > 0) {
       registerArticlesInDb(articles);
     }
-  }, [articles]);
+  }, [articles, liveWebArticles]);
 
   const [savedArticles, setSavedArticles] = useState<string[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);

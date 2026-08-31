@@ -978,82 +978,118 @@ export default function FlipBook({
                 <div
                   onClick={jumpToMasterpiece}
                   className={`md:col-span-5 relative ${palette.leftDarkBg} border-b md:border-b-0 md:border-r border-white/20 flex flex-col justify-between p-4 sm:p-5 overflow-hidden group cursor-pointer min-h-[240px] md:min-h-[460px]`}
-                  title="Clicca per leggere l'articolo completo su quest'opera d'arte"
+                  title={isSearchingWeb ? "Selezione opera in corso..." : "Clicca per leggere l'articolo completo su quest'opera d'arte"}
                 >
-                  {/* Immagine Autentica dell'Opera */}
-                  {(() => {
-                    const coverMeta = getArtworkMetadataForArticle(currentMasterpiece.article, currentMasterpiece);
-                    const proxiedUrl = getProxiedImageUrl(coverMeta.imageUrl, coverMeta.artist, coverMeta.artworkTitle);
-                    return (
-                      <img
-                        src={proxiedUrl}
-                        alt={`${coverMeta.artist} - ${coverMeta.artworkTitle}`}
-                        className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 pointer-events-none"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          const target = e.currentTarget as HTMLImageElement;
-                          const dynamicSearchProxy = `/api/art/image-proxy?artist=${encodeURIComponent(coverMeta.artist || "")}&title=${encodeURIComponent(coverMeta.artworkTitle || "")}`;
-                          if (target.src !== dynamicSearchProxy && !target.src.includes(encodeURIComponent(coverMeta.artist || ""))) {
-                            target.src = dynamicSearchProxy;
-                          } else if (coverMeta.fallbackImageUrl && target.src !== coverMeta.fallbackImageUrl) {
-                            target.src = getProxiedImageUrl(coverMeta.fallbackImageUrl);
-                          }
-                        }}
-                        loading="eager"
-                      />
-                    );
-                  })()}
-
-                  {/* Gradient di contrasto calibrato: preserva i colori e i dettagli dell'opera */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/35 pointer-events-none" />
-
-                  {/* Badge Copertina */}
-                  <div className="relative z-10 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        jumpToMasterpiece();
-                      }}
-                      className="bg-black/75 hover:bg-[#8A2520] backdrop-blur-xs px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-sans font-bold text-amber-200 hover:text-white border border-amber-300/40 shadow-sm transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
-                    >
-                      <Palette className="w-3 h-3 text-amber-300" />
-                      <span>Arte & Ispirazione</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        jumpToMasterpiece();
-                      }}
-                      className="text-[10px] font-sans font-bold text-amber-200 hover:text-white bg-black/80 hover:bg-[#8A2520] px-2.5 py-1 rounded border border-amber-300/30 transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
-                    >
-                      <span>Leggi Pag. {masterpiecePageNum}</span>
-                      <span>→</span>
-                    </button>
-                  </div>
-
-                  {/* Didascalia Opera in Basso a Sinistra */}
-                  <div className="relative z-10 mt-auto pt-24 md:pt-40 text-[11px] font-sans text-white/95 leading-tight drop-shadow-md">
-                    {currentMasterpiece.artworkType && (
-                      <span className="inline-block mb-1.5 px-2 py-0.5 rounded bg-black/70 border border-white/20 text-[9px] font-sans font-medium text-amber-200 uppercase tracking-wide">
-                        {currentMasterpiece.artworkType}
-                      </span>
-                    )}
-                    <div className="font-bold flex items-center gap-1 text-white group-hover:text-amber-200 transition-colors text-xs sm:text-sm">
-                      <span>← {currentMasterpiece.shortArtworkTitle}</span>
-                    </div>
-                    <div className="text-[10px] text-white/90 italic mt-1 flex items-center justify-between">
-                      <span>{currentMasterpiece.museum} &bull; {currentMasterpiece.city}</span>
-                      <span className="text-amber-300 font-sans font-bold text-[10px]">Pag. {masterpiecePageNum}</span>
-                    </div>
-                    {currentMasterpiece.matchingTopic && (
-                      <div className="text-[10px] text-amber-200 font-medium mt-1.5 bg-black/60 backdrop-blur-xs px-2 py-1 rounded border border-amber-400/30 flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-amber-300 shrink-0" />
-                        <span className="truncate">Ispirato a: <strong>{currentMasterpiece.matchingTopic}</strong></span>
+                  {isSearchingWeb ? (
+                    /* Fase di Ricerca Live dell'Opera d'Arte: Nessuna cache o opera precedente mostrata */
+                    <div className="absolute inset-0 bg-stone-900/95 flex flex-col justify-between p-5 z-20 text-white">
+                      <div className="flex items-center justify-between">
+                        <span className="bg-black/80 px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-sans font-bold text-amber-200 border border-amber-300/40 flex items-center gap-1.5">
+                          <Palette className="w-3 h-3 text-amber-300 animate-spin" />
+                          <span>Arte & Ispirazione</span>
+                        </span>
+                        <span className="text-[10px] font-sans text-amber-300/80 animate-pulse">
+                          Ricerca Live...
+                        </span>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="my-auto text-center flex flex-col items-center justify-center space-y-3 px-2">
+                        <div className="relative flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full border-2 border-amber-300/30 border-t-amber-300 animate-spin" />
+                          <Sparkles className="w-4 h-4 text-amber-300 absolute animate-pulse" />
+                        </div>
+                        <div>
+                          <h4 className="font-serif font-bold text-sm sm:text-base text-amber-200">
+                            Selezione Opera d'Arte in Copertina...
+                          </h4>
+                          <p className="text-[11px] text-white/80 font-serif italic mt-1 leading-snug">
+                            Ricerca nel Web dell'opera iconica e della scheda critica per l'edizione di oggi.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-[9px] uppercase tracking-widest text-amber-300/90 font-sans font-bold text-center bg-black/50 py-1 px-2 rounded border border-amber-300/20">
+                        &bull; Cache eliminata: nuova opera per oggi &bull;
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Immagine Autentica dell'Opera */}
+                      {(() => {
+                        const coverMeta = getArtworkMetadataForArticle(currentMasterpiece.article, currentMasterpiece);
+                        const proxiedUrl = getProxiedImageUrl(coverMeta.imageUrl, coverMeta.artist, coverMeta.artworkTitle);
+                        return (
+                          <img
+                            src={proxiedUrl}
+                            alt={`${coverMeta.artist} - ${coverMeta.artworkTitle}`}
+                            className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 pointer-events-none"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const target = e.currentTarget as HTMLImageElement;
+                              const dynamicSearchProxy = `/api/art/image-proxy?artist=${encodeURIComponent(coverMeta.artist || "")}&title=${encodeURIComponent(coverMeta.artworkTitle || "")}`;
+                              if (target.src !== dynamicSearchProxy && !target.src.includes(encodeURIComponent(coverMeta.artist || ""))) {
+                                target.src = dynamicSearchProxy;
+                              } else if (coverMeta.fallbackImageUrl && target.src !== coverMeta.fallbackImageUrl) {
+                                target.src = getProxiedImageUrl(coverMeta.fallbackImageUrl);
+                              }
+                            }}
+                            loading="eager"
+                          />
+                        );
+                      })()}
+
+                      {/* Gradient di contrasto calibrato */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/35 pointer-events-none" />
+
+                      {/* Badge Copertina */}
+                      <div className="relative z-10 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            jumpToMasterpiece();
+                          }}
+                          className="bg-black/75 hover:bg-[#8A2520] backdrop-blur-xs px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-sans font-bold text-amber-200 hover:text-white border border-amber-300/40 shadow-sm transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+                        >
+                          <Palette className="w-3 h-3 text-amber-300" />
+                          <span>Arte & Ispirazione</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            jumpToMasterpiece();
+                          }}
+                          className="text-[10px] font-sans font-bold text-amber-200 hover:text-white bg-black/80 hover:bg-[#8A2520] px-2.5 py-1 rounded border border-amber-300/30 transition-all shadow-sm cursor-pointer flex items-center gap-1 active:scale-95"
+                        >
+                          <span>Leggi Pag. {masterpiecePageNum}</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+
+                      {/* Didascalia Opera in Basso a Sinistra */}
+                      <div className="relative z-10 mt-auto pt-24 md:pt-40 text-[11px] font-sans text-white/95 leading-tight drop-shadow-md">
+                        {currentMasterpiece.artworkType && (
+                          <span className="inline-block mb-1.5 px-2 py-0.5 rounded bg-black/70 border border-white/20 text-[9px] font-sans font-medium text-amber-200 uppercase tracking-wide">
+                            {currentMasterpiece.artworkType}
+                          </span>
+                        )}
+                        <div className="font-bold flex items-center gap-1 text-white group-hover:text-amber-200 transition-colors text-xs sm:text-sm">
+                          <span>← {currentMasterpiece.shortArtworkTitle}</span>
+                        </div>
+                        <div className="text-[10px] text-white/90 italic mt-1 flex items-center justify-between">
+                          <span>{currentMasterpiece.museum} &bull; {currentMasterpiece.city}</span>
+                          <span className="text-amber-300 font-sans font-bold text-[10px]">Pag. {masterpiecePageNum}</span>
+                        </div>
+                        {currentMasterpiece.matchingTopic && (
+                          <div className="text-[10px] text-amber-200 font-medium mt-1.5 bg-black/60 backdrop-blur-xs px-2 py-1 rounded border border-amber-400/30 flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-amber-300 shrink-0" />
+                            <span className="truncate">Ispirato a: <strong>{currentMasterpiece.matchingTopic}</strong></span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Colonna Destra: Sommario con Puntini e Numeri di Pagina */}
@@ -1062,56 +1098,64 @@ export default function FlipBook({
                     <div className="text-xs font-sans uppercase font-bold tracking-wider text-amber-200 mb-2 pb-1 border-b border-white/20 flex justify-between items-center">
                       <span>Sommario del Giorno</span>
                       <span className="text-[10px] text-white/80 font-normal">
-                        {isSearchingWeb ? "Aggiornamento in corso..." : "Clicca per leggere"}
+                        {isSearchingWeb ? "Ricerca e Curatela in corso..." : "Clicca per leggere"}
                       </span>
                     </div>
 
-                    {/* Elenco Articoli e Rubriche: Font e Formattazione Uniforme senza Icone */}
-                    <div className="space-y-2 font-serif text-sm leading-snug">
-                      {/* Voce Capolavoro d'Arte / Opera in Copertina */}
-                      <div
-                        onClick={jumpToMasterpiece}
-                        className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                        title={`Vai all'opera in copertina: ${currentMasterpiece.artworkTitle}`}
-                      >
-                        <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                          {currentMasterpiece.shortArtworkTitle || currentMasterpiece.artworkTitle}
-                        </span>
-                        <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                        <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                          {masterpiecePageNum}
-                        </span>
+                    {isSearchingWeb ? (
+                      /* Fase di Ricerca e Selezione Articoli: Nessuna cache o articolo precedente mostrato */
+                      <div className="py-6 px-3 flex flex-col items-center justify-center text-center space-y-4 my-auto">
+                        <div className="relative flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full border-2 border-amber-300/30 border-t-amber-300 animate-spin" />
+                          <Sparkles className="w-5 h-5 text-amber-300 absolute animate-pulse" />
+                        </div>
+                        <div>
+                          <h3 className="font-serif font-bold text-base sm:text-lg text-amber-200">
+                            Ricerca e Selezione Quotidiana in Corso...
+                          </h3>
+                          <p className="text-xs text-white/90 font-serif italic mt-1 max-w-sm">
+                            Generazione in tempo reale dei nuovi articoli dal Web e dai Grandi Libri per l'edizione di oggi.
+                          </p>
+                        </div>
+                        <div className="w-full bg-black/35 rounded-md p-3 border border-white/20 text-[11px] font-sans space-y-2 text-left text-amber-100 shadow-inner">
+                          <div className="flex items-center gap-2">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                            </span>
+                            <span className="font-bold text-amber-200 text-xs">Avanzamento della redazione:</span>
+                          </div>
+                          <ul className="space-y-1.5 pl-3 text-white/90 text-[10px] list-disc leading-relaxed">
+                            <li>Consultazione fonti live e testate internazionali dal Web...</li>
+                            <li>Analisi degli argomenti d'interesse definiti nel foglio editoriale...</li>
+                            <li>Composizione tipografica dei nuovi articoli (senza uso di cache)...</li>
+                          </ul>
+                        </div>
+                        <div className="text-[10px] uppercase tracking-widest text-amber-300/90 font-sans font-bold bg-black/40 px-3 py-1 rounded border border-amber-300/20">
+                          &bull; Cache eliminata: gli articoli precedenti non vengono mostrati &bull;
+                        </div>
                       </div>
-
-                      {/* Articoli del Giorno */}
-                      {regularArticles.map((art) => {
-                        const pageNum = articlePageMap[art.id] ?? art.pageNumber;
-                        return (
+                    ) : (
+                      /* Elenco Articoli e Rubriche del Giorno Generato */
+                      <>
+                        <div className="space-y-2 font-serif text-sm leading-snug">
+                          {/* Voce Capolavoro d'Arte / Opera in Copertina */}
                           <div
-                            key={art.id}
-                            onClick={() => jumpToArticle(art.id)}
+                            onClick={jumpToMasterpiece}
                             className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                            title={`Vai all'opera in copertina: ${currentMasterpiece.artworkTitle}`}
                           >
                             <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                              {art.shortTitle || art.title}
+                              {currentMasterpiece.shortArtworkTitle || currentMasterpiece.artworkTitle}
                             </span>
                             <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
                             <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                              {pageNum}
+                              {masterpiecePageNum}
                             </span>
                           </div>
-                        );
-                      })}
-                    </div>
 
-                    {/* Riquadro Articoli Condensati */}
-                    {condensedArticles.length > 0 && (
-                      <div className={`mt-2.5 p-2.5 rounded border border-white/30 ${palette.condensedBg} shadow-inner`}>
-                        <div className="text-center font-sans font-bold text-[11px] uppercase tracking-widest text-amber-200 mb-1.5">
-                          — ARTICOLI CONDENSATI —
-                        </div>
-                        <div className="space-y-1.5 font-serif text-sm">
-                          {condensedArticles.map((art) => {
+                          {/* Articoli del Giorno */}
+                          {regularArticles.map((art) => {
                             const pageNum = articlePageMap[art.id] ?? art.pageNumber;
                             return (
                               <div
@@ -1130,61 +1174,92 @@ export default function FlipBook({
                             );
                           })}
                         </div>
-                      </div>
+
+                        {/* Riquadro Articoli Condensati */}
+                        {condensedArticles.length > 0 && (
+                          <div className={`mt-2.5 p-2.5 rounded border border-white/30 ${palette.condensedBg} shadow-inner`}>
+                            <div className="text-center font-sans font-bold text-[11px] uppercase tracking-widest text-amber-200 mb-1.5">
+                              — ARTICOLI CONDENSATI —
+                            </div>
+                            <div className="space-y-1.5 font-serif text-sm">
+                              {condensedArticles.map((art) => {
+                                const pageNum = articlePageMap[art.id] ?? art.pageNumber;
+                                return (
+                                  <div
+                                    key={art.id}
+                                    onClick={() => jumpToArticle(art.id)}
+                                    className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                                  >
+                                    <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
+                                      {art.shortTitle || art.title}
+                                    </span>
+                                    <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                                    <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
+                                      {pageNum}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Rubriche del Giorno */}
+                        <div className="space-y-2 font-serif text-sm leading-snug pt-2 border-t border-white/20">
+                          {/* Riga Dedicata: Più parole, più idee (La Parola del Giorno) */}
+                          <div
+                            onClick={() => goToPage(wordPageNumber)}
+                            className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                            title={`Vai a Più parole, più idee (${dailyWord?.word || "Parola del Giorno"})`}
+                          >
+                            <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
+                              Più parole, più idee ({dailyWord?.word || "Parola del Giorno"})
+                            </span>
+                            <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                            <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
+                              {wordPageNumber}
+                            </span>
+                          </div>
+
+                          {/* Riga Dedicata: Il Libro Consigliato di Oggi */}
+                          <div
+                            onClick={() => goToPage(bookPageNumber)}
+                            className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                            title="Vai a Il Libro Consigliato di Oggi"
+                          >
+                            <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
+                              Il Libro Consigliato di Oggi
+                            </span>
+                            <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                            <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
+                              {bookPageNumber}
+                            </span>
+                          </div>
+
+                          {/* Riga Dedicata: La Massima del Giorno (Retro Rivista) */}
+                          <div
+                            onClick={() => goToPage(totalPages - 1)}
+                            className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                            title="Vai alla Massima del Giorno (Retro Rivista)"
+                          >
+                            <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
+                              La Massima del Giorno
+                            </span>
+                            <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                            <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
+                              {totalPages - 1}
+                            </span>
+                          </div>
+                        </div>
+                      </>
                     )}
-
-                    {/* Rubriche del Giorno */}
-                    <div className="space-y-2 font-serif text-sm leading-snug pt-2 border-t border-white/20">
-                      {/* Riga Dedicata: Più parole, più idee (La Parola del Giorno) */}
-                      <div
-                        onClick={() => goToPage(wordPageNumber)}
-                        className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                        title={`Vai a Più parole, più idee (${dailyWord?.word || "Parola del Giorno"})`}
-                      >
-                        <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                          Più parole, più idee ({dailyWord?.word || "Parola del Giorno"})
-                        </span>
-                        <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                        <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                          {wordPageNumber}
-                        </span>
-                      </div>
-
-                      {/* Riga Dedicata: Il Libro Consigliato di Oggi */}
-                      <div
-                        onClick={() => goToPage(bookPageNumber)}
-                        className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                        title="Vai a Il Libro Consigliato di Oggi"
-                      >
-                        <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                          Il Libro Consigliato di Oggi
-                        </span>
-                        <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                        <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                          {bookPageNumber}
-                        </span>
-                      </div>
-
-                      {/* Riga Dedicata: La Massima del Giorno (Retro Rivista) */}
-                      <div
-                        onClick={() => goToPage(totalPages - 1)}
-                        className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                        title="Vai alla Massima del Giorno (Retro Rivista)"
-                      >
-                        <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                          La Massima del Giorno
-                        </span>
-                        <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                        <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                          {totalPages - 1}
-                        </span>
-                      </div>
-                    </div>
                   </div>
 
                   {/* Piede della Colonna */}
                   <div className="mt-3 pt-2.5 border-t border-white/20 flex items-center justify-between text-xs font-sans text-white/80">
-                    <span className="text-[11px] italic">Clicca su qualsiasi articolo o rubrica per iniziare la lettura</span>
+                    <span className="text-[11px] italic">
+                      {isSearchingWeb ? "Attendi il completamento della curatela..." : "Clicca su qualsiasi articolo o rubrica per iniziare la lettura"}
+                    </span>
                   </div>
                 </div>
               </div>

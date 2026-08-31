@@ -792,15 +792,17 @@ Esposto al Museo Archeologico di Heraklion insieme agli affreschi di Cnosso e ai
 function findVerifiedDictionaryEntry(title: string = "", artist: string = "", text: string = "") {
   const query = `${title} ${artist} ${text}`.toLowerCase();
   
-  // 1. Cerca per titolo specifico dell'opera o parole chiave nel dizionario ad alta risoluzione
+  // 1. Cerca per titolo specifico dell'opera, artista o parole chiave nel dizionario ad alta risoluzione
   for (const [key, item] of Object.entries(ART_IMAGE_DICTIONARY)) {
     const itemTitleLower = (item.title || "").toLowerCase();
+    const itemArtistLower = (item.artist || "").toLowerCase();
     
-    // Verifica se il titolo specifico dell'opera (es. "notte stellata", "l'urlo") è presente nel testo
-    if (
-      (itemTitleLower.length > 4 && query.includes(itemTitleLower)) ||
-      (item.keywords && item.keywords.some((kw) => kw.length > 5 && query.includes(kw.toLowerCase())))
-    ) {
+    // Verifica se il titolo dell'opera, l'artista o una parola chiave è presente
+    const titleMatch = itemTitleLower.length > 3 && query.includes(itemTitleLower);
+    const keywordMatch = item.keywords && item.keywords.some((kw) => kw.length >= 3 && query.includes(kw.toLowerCase()));
+    const artistMatch = itemArtistLower.length > 4 && (query.includes(itemArtistLower) || (artist && artist.toLowerCase().includes(itemArtistLower)));
+
+    if (titleMatch || keywordMatch || artistMatch) {
       return item;
     }
   }
@@ -810,8 +812,8 @@ function findVerifiedDictionaryEntry(title: string = "", artist: string = "", te
     const artTitle = (m.artworkTitle || "").toLowerCase();
     const shortTitle = (m.shortArtworkTitle || "").toLowerCase();
     return (
-      (artTitle.length > 4 && query.includes(artTitle)) ||
-      (shortTitle.length > 4 && query.includes(shortTitle))
+      (artTitle.length > 3 && query.includes(artTitle)) ||
+      (shortTitle.length > 3 && query.includes(shortTitle))
     );
   });
 
@@ -1055,40 +1057,78 @@ export function getMasterpieceForDayAndInterests(
     (t || "").toLowerCase().replace(/[^a-z0-9]/g, "")
   );
 
-  const isExcluded = (art: ArtMasterpiece) => {
-    const normTitle = (art.artworkTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const isExcluded = (artTitle: string) => {
+    const normTitle = (artTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     return normExcludes.some((ex) => ex.length > 2 && (normTitle.includes(ex) || ex.includes(normTitle)));
   };
 
-  const availableCatalog = ART_MASTERPIECES_CATALOG.filter((art) => !isExcluded(art));
-  const pool = availableCatalog.length > 0 ? availableCatalog : ART_MASTERPIECES_CATALOG;
+  // Converti gli elementi del dizionario in ArtMasterpiece per estendere il pool di scelta
+  const dictionaryMasterpieces: ArtMasterpiece[] = Object.entries(ART_IMAGE_DICTIONARY).map(([key, item]) => {
+    return {
+      id: `dict-art-${key}`,
+      artworkTitle: item.title,
+      artist: item.artist,
+      shortArtworkTitle: `${item.artist.toUpperCase()}: ${item.title}`,
+      year: item.year,
+      museum: item.museum,
+      city: item.city,
+      artworkType: item.artworkType || "Capolavoro d'Arte",
+      matchingCategory: "Cultura",
+      matchingTopic: item.keywords.join(", "),
+      imageUrl: item.url,
+      fallbackImageUrl: item.url,
+      article: {
+        id: `dict-art-${key}`,
+        pageNumber: 1,
+        category: "Arte & Ispirazione",
+        title: `Arte & Visioni: ${item.title} di ${item.artist} (${item.year})`,
+        shortTitle: `Arte: ${item.artist} — ${item.title.slice(0, 30)}`,
+        excerpt: `Conservato presso ${item.museum} a ${item.city}: il capolavoro d'arte d'autore che dialoga con la sensibilità e gli interessi del lettore.`,
+        content: `SCHEDA CRITICA DELL'OPERA:\nTitolo: ${item.title}\nAutore: ${item.artist}\nAnno: ${item.year}\nMuseo: ${item.museum} (${item.city})\n\n1. CONTESTO STORICO E VISIONE:\nUn'opera iconica che incarna la ricerca estetica e concettuale dell'umanità. Conservata presso ${item.museum}, l'opera di ${item.artist} rappresenta una pietra miliare della storia dell'arte.\n\n2. COMPOSIZIONE E SIMBOLISMO:\nIl linguaggio visivo e il segno grafico dell'artista creano un ponte ideale con i temi dell'ingegno umano e della bellezza formale.\n\n3. RISONANZA CONTEMPORANEA:\nIn questo numero di Personal Digest, l'opera viene proposta come riflessione visiva in sintonia con le passioni e gli interessi personali del lettore.`,
+        readingTime: "5 min",
+        author: "Redazione Arte & Grandi Musei",
+        date: "Oggi",
+        highlightQuote: `«${item.title} di ${item.artist}: una testimonianza immortale del genio artistico dell'umanità.»`,
+        originalLanguage: "Italiano",
+        sources: [
+          {
+            title: `Archivio Ufficiale Museo: ${item.museum}`,
+            url: item.url,
+            publisher: item.museum,
+            originalLanguage: "Italiano"
+          }
+        ]
+      }
+    };
+  });
+
+  const fullPool = [...ART_MASTERPIECES_CATALOG, ...dictionaryMasterpieces].filter(
+    (art) => !isExcluded(art.artworkTitle)
+  );
+
+  const pool = fullPool.length > 0 ? fullPool : ART_MASTERPIECES_CATALOG;
 
   if (!interests || interests.length === 0) {
-    return pool[Math.abs(daySeed) % pool.length];
+    return pool[Math.abs(daySeed + 7) % pool.length];
   }
 
-  // Cerca un capolavoro che corrisponda per categoria o per topic dell'interesse attivo per il giorno
+  // Cerca un capolavoro che corrisponda ai keyword dell'interesse attivo
   const sortedInterests = [...interests].sort((a, b) => (b.priority || 3) - (a.priority || 3));
   const selectedInterest = sortedInterests[Math.abs(daySeed) % sortedInterests.length] || sortedInterests[0];
+  const searchTerms = [
+    (selectedInterest.category || "").toLowerCase(),
+    (selectedInterest.topic || "").toLowerCase()
+  ].filter(Boolean);
 
   const matched = pool.find((art) => {
-    const artCat = art.matchingCategory.toLowerCase();
-    const intCat = (selectedInterest.category || "").toLowerCase();
-    const artTopic = art.matchingTopic.toLowerCase();
-    const intTopic = (selectedInterest.topic || "").toLowerCase();
-
-    return (
-      artCat.includes(intCat) ||
-      intCat.includes(artCat) ||
-      artTopic.includes(intTopic) ||
-      intTopic.includes(artTopic)
-    );
+    const artText = `${art.artworkTitle} ${art.artist} ${art.matchingCategory || ''} ${art.matchingTopic || ''}`.toLowerCase();
+    return searchTerms.some((term) => term.length > 3 && artText.includes(term));
   });
 
   if (matched) {
     return matched;
   }
 
-  return pool[Math.abs(daySeed) % pool.length];
+  return pool[Math.abs(daySeed * 17 + 3) % pool.length];
 }
 

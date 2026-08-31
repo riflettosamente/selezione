@@ -80,19 +80,19 @@ async function generateContentWithRetryAndFallback(
     } catch (err: any) {
       lastError = err;
       if (isQuotaError(err)) {
-        // Search Grounding quota is tied to the API key; skip repeating failed search queries across other models
+        console.info(`Gemini API quota reached for model ${model} during search grounding.`);
         break;
       } else {
-        console.warn(`Non-quota error with model ${model}:`, err?.message || err);
+        console.info(`Non-quota issue with model ${model}:`, err?.message || err);
       }
     }
   }
 
-  // Pass 2: If Search Grounding was requested and hit quota limits (429),
+  // Pass 2: If Search Grounding was requested and failed (quota or network fetch failed),
   // degrade gracefully to direct high-accuracy AI synthesis without Search Tool.
   if (requestOptions.config?.tools && requestOptions.config.tools.length > 0) {
-    console.info("Google Search grounding quota reached; falling back to direct Gemini knowledge synthesis...");
-    const fallbackConfig = { ...requestOptions.config, responseMimeType: "application/json" };
+    console.info("Search Grounding unavailable or quota reached; falling back to direct Gemini knowledge synthesis...");
+    const fallbackConfig = { ...requestOptions.config };
     delete fallbackConfig.tools;
 
     for (const model of modelsToTry) {
@@ -105,11 +105,17 @@ async function generateContentWithRetryAndFallback(
         if (response && response.text) return response;
       } catch (err: any) {
         lastError = err;
+        if (isQuotaError(err)) {
+          console.info(`Gemini API quota reached for model ${model} during direct synthesis.`);
+          break;
+        } else {
+          console.info(`Fallback synthesis issue with model ${model}:`, err?.message || err);
+        }
       }
     }
   }
 
-  throw lastError;
+  throw lastError || new Error("Gemini AI generation unavailable");
 }
 
 function extractDomainName(rawUrl: string): string {
@@ -487,21 +493,108 @@ app.post("/api/articles/daily", async (req, res) => {
       }
     ];
 
+function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateFormatted: string, seed: number = 0) {
+  const interests = Array.isArray(activeInterests) && activeInterests.length > 0
+    ? activeInterests
+    : [
+        { category: "Attualità", topic: "News e Curiosità dal Mondo", description: "Fatti insoliti, evoluzioni geopolitiche e storie dal mondo." },
+        { category: "Scienza", topic: "Nuove Scoperte Scientifiche", description: "Frontiere della ricerca e innovazioni tecnologiche." },
+        { category: "Scienza", topic: "Astronomia e Spazio", description: "Esplorazione spaziale e astrofisica." },
+        { category: "Mistero", topic: "UFO e Alieni", description: "Ricerca SETI, esobiologia e monitoraggio UAP." },
+        { category: "Cultura", topic: "Narrativa Breve", description: "Saggi brevi, racconti e letteratura." },
+        { category: "Salute", topic: "Benessere e Alimentazione", description: "Stili di vita sani, nutrizione e medicina." },
+        { category: "Storia", topic: "Storia Contemporanea", description: "Analisi storica del Novecento." },
+        { category: "Tecnologia", topic: "Intelligenza Artificiale", description: "Modelli di linguaggio, robotica e futuro digitale." },
+        { category: "Saggi", topic: "Saggio di Approfondimento", description: "Analisi multidisciplinare sui grandi temi del nostro tempo." }
+      ];
+
+  const standardInterests = interests.slice(0, 8);
+  const condensedInterest = interests[8] || interests[interests.length - 1] || interests[0];
+
+  const todayStr = dateFormatted || new Date().toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+
+  const articles = standardInterests.map((item, idx) => {
+    const cat = item.category || "Attualità & Cultura";
+    const topic = item.topic || "Approfondimento Speciale";
+    const slug = topic.toLowerCase().replace(/[^a-z0-9]/g, "-");
+
+    return {
+      id: `fallback-art-${slug}-${seed}-${idx}`,
+      category: cat,
+      topicRef: topic,
+      title: `${topic}: Le più recenti scoperte e la visione della ricerca`,
+      shortTitle: `${cat}: ${topic}`,
+      excerpt: item.description || `Sintesi ragionata e analisi critica d'autore dedicata al tema "${topic}".`,
+      content: `In questo numero di Personal Digest, la redazione dedica un ampio saggio al tema "${topic}" (${cat}).\n\nAnalizzando le pubblicazioni più recenti ed esaminando le posizioni dei principali istituti di ricerca, l'articolo ricostruisce il quadro attuale delle conoscenze.\n\nL'evoluzione del dibattito scientifico e culturale su "${topic}" evidenzia come i nuovi strumenti di indagine stiano trasformando radicalmente la nostra comprensione di questa materia, offrendo nuove prospettive per il futuro.`,
+      readingTime: "5 min",
+      author: `Redazione ${cat}`,
+      date: todayStr,
+      highlightQuote: `«Comprendere a fondo ${topic} significa acquisire una chiave di lettura privileged sulla complessità del mondo contemporaneo.»`,
+      originalLanguage: "Italiano",
+      isCondensedBook: false,
+      sources: [
+        {
+          title: `Rassegna Stampa e Archivi Ufficiali: ${topic}`,
+          url: `https://www.google.com/search?q=${encodeURIComponent(topic)}`,
+          publisher: item.sources || "Archivio Redazionale Personal Digest",
+          originalLanguage: "Italiano",
+          keyFinding: `Sintesi ragionata delle evidenze documentate sul tema ${topic}.`
+        }
+      ]
+    };
+  });
+
+  const condCat = condensedInterest.category || "Saggi & Volumi";
+  const condTopic = condensedInterest.topic || "Grande Saggio del Mese";
+  const condSlug = condTopic.toLowerCase().replace(/[^a-z0-9]/g, "-");
+
+  articles.push({
+    id: `fallback-condensed-${condSlug}-${seed}`,
+    category: condCat,
+    topicRef: condTopic,
+    title: `Saggio Condensato: ${condTopic} e la trasformazione delle idee`,
+    shortTitle: `Saggio: ${condTopic}`,
+    excerpt: condensedInterest.description || `Sintesi d'autore del volume fondamentale dedicato al tema "${condTopic}".`,
+    content: `ESTRATTO E SINTESI RAGIONATA DEL VOLUME:\nTema: ${condTopic}\n\nUn'analisi approfondita delle tesi centrali espresse negli studi più recenti su "${condTopic}". Il testo esamina le origini, il dibattito contemporaneo e le implicazioni a lungo termine per la società e la conoscenza.\n\nIn una trattazione limpida e rigorosa, l'opera offre al lettore gli strumenti concettuali indispensabili per orientarsi tra le diverse interpretazioni ed estrapolare le lezioni fondamentali per il presente.`,
+    readingTime: "8 min",
+    author: "Redazione Saggi & Grandi Opere",
+    date: todayStr,
+    highlightQuote: `«La conoscenza del tema ${condTopic} rappresenta uno dei pilastri dell'educazione permanente e del pensiero critico.»`,
+    originalLanguage: "Italiano",
+    isCondensedBook: true,
+    sources: [
+      {
+        title: `Volume di Riferimento: ${condTopic}`,
+        url: `https://www.google.com/search?q=${encodeURIComponent(condTopic)}`,
+        publisher: "Edizioni Scientifiche e Culturali",
+        originalLanguage: "Italiano",
+        keyFinding: `Analisi delle tesi principali del saggio su ${condTopic}.`
+      }
+    ]
+  });
+
+  return articles;
+}
+
     const todayDateKey = new Date().toISOString().slice(0, 10);
     const cacheKey = `daily_articles_${todayDateKey}`;
 
-    // Controlla cache condivisa del server (valida per 24 ore)
-    const cached = dailyArticlesCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24 && cached.articles.length > 0) {
-      return res.json({
-        success: true,
-        articles: cached.articles,
-        groundingSources: cached.groundingSources || [],
-        webSearchQueries: cached.webSearchQueries || [],
-        matchedTopicsCount: activeInterests.length,
-        count: cached.articles.length,
-        source: "server_cache"
-      });
+    if (forceRefresh) {
+      dailyArticlesCache.delete(cacheKey);
+    } else {
+      // Controlla cache condivisa del server (valida per 24 ore)
+      const cached = dailyArticlesCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24 && cached.articles.length > 0) {
+        return res.json({
+          success: true,
+          articles: cached.articles,
+          groundingSources: cached.groundingSources || [],
+          webSearchQueries: cached.webSearchQueries || [],
+          matchedTopicsCount: activeInterests.length,
+          count: cached.articles.length,
+          source: "server_cache"
+        });
+      }
     }
 
     if (process.env.GEMINI_API_KEY) {
@@ -706,30 +799,33 @@ Requisiti:
         }
       } catch (aiErr: any) {
         if (isQuotaError(aiErr)) {
-          console.info("Gemini API quota reached / rate limited in /api/articles/daily.");
-          return res.status(429).json({
-            success: false,
+          console.info("Gemini API quota reached / rate limited in /api/articles/daily. Serving dynamic fallback articles for interests.");
+          const fallbackArticles = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+          return res.json({
+            success: true,
             quotaExceeded: true,
-            articles: [],
+            articles: fallbackArticles,
             groundingSources: [],
-            error: "Limite di richieste API Gemini raggiunto. Visualizzazione edizione curata."
+            error: "Limite di richieste API Gemini raggiunto. Generata edizione curata dinamica sugli argomenti selezionati."
           });
         }
         console.warn("Gemini API search error in /api/articles/daily:", aiErr?.message || aiErr);
-        return res.status(500).json({
-          success: false,
-          articles: [],
+        const fallbackArticles = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+        return res.json({
+          success: true,
+          articles: fallbackArticles,
           groundingSources: [],
-          error: "Errore durante la generazione e ricerca live degli articoli dal web: " + (aiErr?.message || "Servizio non disponibile")
+          error: "Generata edizione curata dinamica sugli argomenti selezionati."
         });
       }
     }
 
-    return res.status(503).json({
-      success: false,
-      articles: [],
+    const fallbackArticles = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+    return res.json({
+      success: true,
+      articles: fallbackArticles,
       groundingSources: [],
-      error: "Chiave GEMINI_API_KEY non configurata sul server."
+      error: "Chiave GEMINI_API_KEY non configurata sul server. Generata edizione curata dinamica."
     });
   } catch (error: any) {
     console.error("Error in /api/articles/daily:", error);
@@ -1384,21 +1480,111 @@ async function verifyDirectImageUrl(url?: string | null): Promise<boolean> {
   if (!url || typeof url !== "string" || !url.startsWith("http")) return false;
   if (url.includes("placeholder") || url.includes("/wiki/File:")) return false;
   try {
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: "HEAD",
       headers: {
         "User-Agent": "PersonalDigestBot/2.0 (web-art-search@personal-digest.app)"
-      }
+      },
+      signal: AbortSignal.timeout(4000)
     });
-    return res.ok;
+    if (res.ok) return true;
+
+    res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": "PersonalDigestBot/2.0 (web-art-search@personal-digest.app)",
+        "Range": "bytes=0-1024"
+      },
+      signal: AbortSignal.timeout(4000)
+    });
+    return res.ok || res.status === 206;
   } catch {
     return false;
   }
 }
 
+// Helper per la ricerca Google Web Live dell'immagine di un'opera d'arte con Gemini e Search Grounding
+async function searchArtworkImageWithGoogleSearch(artist: string, title: string): Promise<string | null> {
+  if (!process.env.GEMINI_API_KEY || (!artist && !title)) return null;
+
+  try {
+    const ai = getGemini();
+    const cleanTitle = (title || "").replace(/\(.*?\)/g, "").trim();
+    const cleanArtist = (artist || "").replace(/\(.*?\)/g, "").trim();
+
+    const prompt = `Esegui una RICERCA GOOGLE WEB LIVE per trovare l'URL di un'immagine diretta ad alta risoluzione o della pagina Wikimedia Commons File: per la seguente SPECIFICA OPERA D'ARTE:
+- Titolo Opera: "${cleanTitle}"
+- Artista: "${cleanArtist}"
+
+REGOLE ESSENZIALI:
+1. Cerca l'immagine dell'OPERA D'ARTE (dipinto, quadro, disegno, tavola scientifica, scultura, incisione, opera visiva), NON la foto o il ritratto dell'autore.
+2. Trova un URL di un'immagine diretta (.jpg, .png, .jpeg, .webp da upload.wikimedia.org, wikipedia, musei o gallerie d'arte) oppure un link della pagina File: su Wikimedia Commons (es. https://commons.wikimedia.org/wiki/File:...).
+3. Rispondi ESCLUSIVAMENTE con un JSON strutturato valido:
+{
+  "imageUrl": "URL dell'immagine o della pagina Wikimedia File:"
+}`;
+
+    const response = await generateContentWithRetryAndFallback(
+      ai,
+      {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          tools: [{ googleSearch: {} }],
+          temperature: 0.2,
+        },
+      },
+      "gemini-3.6-flash"
+    );
+
+    const text = response.text || "{}";
+    const data = safeExtractJson(text);
+    if (data?.imageUrl && typeof data.imageUrl === "string" && data.imageUrl.startsWith("http")) {
+      const candidateUrl = data.imageUrl.trim();
+      if (candidateUrl.includes("/wiki/File:") || candidateUrl.includes("/wiki/File%3A")) {
+        const filePart = candidateUrl.split("/wiki/")[1];
+        if (filePart) {
+          const fileTitle = decodeURIComponent(filePart).replace(/^File:/i, "File:");
+          const fileApiUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(fileTitle)}&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*`;
+          const fileRes = await fetch(fileApiUrl, {
+            headers: { "User-Agent": "PersonalDigestBot/2.0 (web-art-search@personal-digest.app)" }
+          });
+          if (fileRes.ok) {
+            const fileData: any = await fileRes.json();
+            const p = fileData.query?.pages;
+            if (p) {
+              const firstPage = Object.values(p)[0] as any;
+              const info = firstPage?.imageinfo?.[0];
+              if (info?.url && (await verifyDirectImageUrl(info.url))) {
+                return info.url;
+              }
+            }
+          }
+        }
+      } else if (/\.(jpg|jpeg|png|webp)($|\?)/i.test(candidateUrl)) {
+        if (await verifyDirectImageUrl(candidateUrl)) {
+          return candidateUrl;
+        }
+      }
+    }
+  } catch (err: any) {
+    if (isQuotaError(err)) {
+      console.info("searchArtworkImageWithGoogleSearch: Gemini API quota reached, skipping AI web search.");
+    } else {
+      console.info("searchArtworkImageWithGoogleSearch info:", err?.message || err);
+    }
+  }
+  return null;
+}
+
 // Helper per la risoluzione e ricerca dinamica di immagini ad alta definizione sul Web e Wikimedia Commons
 async function searchWikimediaImage(artist: string, title: string, hintUrl?: string): Promise<string | null> {
   try {
+    // 0. Ricerca Google Web Live dell'opera con Gemini Search Grounding
+    const googleWebResult = await searchArtworkImageWithGoogleSearch(artist, title);
+    if (googleWebResult) {
+      return googleWebResult;
+    }
+
     // 1. Se hintUrl è fornito e punta direttamente a upload.wikimedia.org, verificalo
     if (hintUrl && typeof hintUrl === "string" && hintUrl.startsWith("http")) {
       const cleanHint = hintUrl.split("?")[0];
@@ -1443,20 +1629,18 @@ async function searchWikimediaImage(artist: string, title: string, hintUrl?: str
       .replace(/–|-/g, "")
       .trim();
     
+    // Le query cercano ESCLUSIVAMENTE l'opera d'arte (e mai l'autore isolato, per evitare la foto del profilo dell'artista)
     const queries = [
-      `${cleanArtist} ${cleanTitle}`,
       `${cleanTitle} ${cleanArtist}`,
-      `${cleanArtist} drawing`,
-      `${cleanArtist} painting`,
-      `${cleanArtist}`,
-      `${cleanTitle}`,
+      `${cleanArtist} ${cleanTitle}`,
+      `${cleanTitle}`
     ].filter(q => q.length > 2);
 
-    // 2. Ricerca su Wikipedia (Italiano ed Inglese) con prop=pageimages (restituisce anteprime ad altissima qualità)
+    // 2. Ricerca su Wikipedia (Italiano ed Inglese) con prop=pageimages
     for (const lang of ["it", "en"]) {
-      for (const q of queries.slice(0, 4)) {
+      for (const q of queries) {
         try {
-          const wikiSearchUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=4&prop=pageimages&pithumbsize=1200&format=json&origin=*`;
+          const wikiSearchUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=6&prop=pageimages&pithumbsize=1200&format=json&origin=*`;
           const wikiRes = await fetch(wikiSearchUrl, {
             headers: { "User-Agent": "PersonalDigestBot/2.0" }
           });
@@ -1466,8 +1650,39 @@ async function searchWikimediaImage(artist: string, title: string, hintUrl?: str
             if (pages) {
               for (const pid of Object.keys(pages)) {
                 const page = pages[pid];
+                const pageTitleLower = (page.title || "").toLowerCase();
+                const artistLower = cleanArtist.toLowerCase();
+                const titleLower = cleanTitle.toLowerCase();
+
+                // FILTRO FONDAMENTALE: Se la pagina è la biografia dell'artista (es. la pagina si chiama proprio "Santiago Ramón y Cajal" o "Michelangelo")
+                // e non contiene il titolo dell'opera, scartiamo la thumbnail perché sarebbe la foto/ritratto dell'autore!
+                const isArtistBiographyPage =
+                  artistLower.length > 3 &&
+                  (pageTitleLower === artistLower || pageTitleLower.startsWith(artistLower + " (")) &&
+                  !pageTitleLower.includes(titleLower);
+
+                if (isArtistBiographyPage) {
+                  continue; // Ignora la foto dell'autore!
+                }
+
                 if (page.thumbnail?.source && !page.thumbnail.source.includes("icon") && !page.thumbnail.source.includes("flag")) {
                   const candidate = page.thumbnail.source.split("?")[0];
+                  // Evita file la cui URL o nome indica chiaramente che è un ritratto/foto dell'artista (a meno che l'opera non sia proprio un autoritratto)
+                  const candidateLower = candidate.toLowerCase();
+                  const isPortraitOfAuthor =
+                    !titleLower.includes("autoritratto") &&
+                    !titleLower.includes("portrait") &&
+                    !titleLower.includes("ritratto") &&
+                    (candidateLower.includes("portrait") ||
+                      candidateLower.includes("ritratto") ||
+                      candidateLower.includes("photo_of") ||
+                      candidateLower.includes("autoretrato") ||
+                      candidateLower.includes("self-portrait"));
+
+                  if (isPortraitOfAuthor) {
+                    continue;
+                  }
+
                   if (await verifyDirectImageUrl(candidate)) {
                     return candidate;
                   }
@@ -1494,6 +1709,18 @@ async function searchWikimediaImage(artist: string, title: string, hintUrl?: str
               const page = pages[pageId];
               const info = page.imageinfo?.[0];
               const titleLower = (page.title || "").toLowerCase();
+              const artworkTitleLower = cleanTitle.toLowerCase();
+
+              const isPortraitFile =
+                !artworkTitleLower.includes("autoritratto") &&
+                !artworkTitleLower.includes("portrait") &&
+                !artworkTitleLower.includes("ritratto") &&
+                (titleLower.includes("portrait") ||
+                  titleLower.includes("ritratto") ||
+                  titleLower.includes("photo_of") ||
+                  titleLower.includes("self-portrait") ||
+                  titleLower.includes("statue_of"));
+
               if (
                 info &&
                 info.url &&
@@ -1501,7 +1728,8 @@ async function searchWikimediaImage(artist: string, title: string, hintUrl?: str
                 !titleLower.includes("flag") &&
                 !titleLower.includes("icon") &&
                 !titleLower.includes("logo") &&
-                !titleLower.includes("tumba")
+                !titleLower.includes("tumba") &&
+                !isPortraitFile
               ) {
                 const candidate = info.url.split("?")[0];
                 if (await verifyDirectImageUrl(candidate)) {
@@ -1515,8 +1743,8 @@ async function searchWikimediaImage(artist: string, title: string, hintUrl?: str
         // Continue to next query attempt
       }
     }
-  } catch (err) {
-    console.warn("searchWikimediaImage error:", err);
+  } catch (err: any) {
+    console.info("searchWikimediaImage info:", err?.message || err);
   }
   return null;
 }
@@ -1746,7 +1974,7 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato valido:
             tools: [{ googleSearch: {} }],
             temperature: 0.4,
           },
-        }, "gemini-3.7-flash");
+        }, "gemini-3.6-flash");
 
         const text = response.text || "{}";
         const artData = safeExtractJson(text);
@@ -1798,10 +2026,59 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato valido:
       }
     }
 
+    const selectedInterestForFallback = activeInterests.length > 0
+      ? activeInterests[effectiveIndex % activeInterests.length]
+      : { category: "Arte & Filosofia", topic: "Il Genio Umano e la Bellezza" };
+
+    const fallbackImage = "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg/1280px-Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg";
+
+    const fallbackMasterpiece: any = {
+      id: `arte-ispirazione-${(selectedInterestForFallback.category || 'arte').toLowerCase().replace(/[^a-z0-9]/g, '-')}-${effectiveIndex}`,
+      artworkTitle: "La Nascita di Venere",
+      artist: "Sandro Botticelli (1445 – 1510)",
+      shortArtworkTitle: "BOTTICELLI: La Nascita di Venere (1485)",
+      year: "1485 circa",
+      museum: "Galleria degli Uffizi",
+      city: "Firenze, Italia",
+      artworkType: "Quadro ad Olio / Tempera su Tela",
+      matchingCategory: selectedInterestForFallback.category || "Arte & Cultura",
+      matchingTopic: selectedInterestForFallback.topic || "Armonia & Filosofia",
+      whyConnected: `Un capolavoro universale selezionato per dialogare con '${selectedInterestForFallback.topic}', elevando la sensibilità del lettore attraverso l'iconografia neoplatonica del Rinascimento.`,
+      imageUrl: fallbackImage,
+      article: {
+        id: `arte-ispirazione-${(selectedInterestForFallback.category || 'arte').toLowerCase().replace(/[^a-z0-9]/g, '-')}-${effectiveIndex}`,
+        pageNumber: 1,
+        category: "Arte & Ispirazione",
+        title: `Arte & Visioni: La Nascita di Venere di Sandro Botticelli — Ispirato a ${selectedInterestForFallback.topic}`,
+        shortTitle: "Arte: Botticelli — La Nascita di Venere",
+        excerpt: `Un viaggio visivo ispirato a '${selectedInterestForFallback.topic}': la celebre opera conservata presso la Galleria degli Uffizi a Firenze.`,
+        content: `1. Il Dialogo Visivo con "${selectedInterestForFallback.topic}"\nUn'opera leggendaria che incarna l'armonia, la bellezza ideale e l'ingegno filosofico del Rinascimento fiorentino, instaurando una risonanza concettuale profonda con la tua passione per ${selectedInterestForFallback.topic}.\n\n2. La Genesi, l'Autore e il Contesto Storico\nRealizzata attorno al 1485 per la villa medicea di Castello su commissione di Lorenzo di Pierfrancesco de' Medici, l'opera rappresenta il vertice dell'arte neoplatonica di Sandro Botticelli.\n\n3. Composizione, Segno Grafico e Simboli Nascosti\nLa dea Venere emerge dalla spuma del mare su una grande conchiglia, spinta dal vento Zefiro abbracciato alla ninfa Clori, mentre la Grazia Ora della Primavera l'accoglie offrendole un manto ricamato di fiori.\n\n4. Risonanza Culturale e Visione Contemporanea\nOltre l'allegoria classica, l'opera simboleggia la rinascita dell'anima attraverso l'amore contemplativo e la conoscenza sublime.\n\n5. Collocazione Museale, Archivi e Conservazione\nOggi l'opera è custodita nella sala Botticelli della Galleria degli Uffizi a Firenze, ammirata ogni anno da milioni di visitatori.`,
+        readingTime: "7 min",
+        author: "Redazione Arte & Grandi Musei",
+        date: todayDateKey,
+        highlightQuote: "«La bellezza pura è il veicolo attraverso cui l'anima contempla la verità suprema.» — Accademia Neoplatonica Fiorentina",
+        originalLanguage: "Italiano",
+        sources: [
+          {
+            title: "Gallerie degli Uffizi - Scheda Opera Ufficiale",
+            url: "https://www.uffizi.it/opere/nascita-di-venere",
+            publisher: "Gallerie degli Uffizi",
+            originalLanguage: "Italiano"
+          }
+        ]
+      }
+    };
+
+    const resolvedFallbackImage = await searchWikimediaImage(fallbackMasterpiece.artist, fallbackMasterpiece.artworkTitle, fallbackImage);
+    if (resolvedFallbackImage) {
+      fallbackMasterpiece.imageUrl = resolvedFallbackImage;
+      fallbackMasterpiece.article.imageUrl = resolvedFallbackImage;
+    }
+
     res.json({
       success: true,
-      masterpiece: null,
-      sourceSheet: "Interessi Personali",
+      masterpiece: fallbackMasterpiece,
+      sourceSheet: "Interessi Personali (Selezione Curata)",
     });
   } catch (error: any) {
     console.error("Error in /api/art/masterpiece:", error);
