@@ -34,6 +34,26 @@ export interface InterestItem {
   enabled?: boolean;
 }
 
+// Helper to detect transient server errors (503 High Demand, 500 Internal, temporary unavailability)
+function isTransientError(err: any): boolean {
+  if (!err) return false;
+  const msg = typeof err === "string" ? err : err?.message || JSON.stringify(err);
+  return (
+    err?.status === 503 ||
+    err?.code === 503 ||
+    err?.status === 500 ||
+    err?.code === 500 ||
+    err?.status === "UNAVAILABLE" ||
+    msg.includes("503") ||
+    msg.includes("UNAVAILABLE") ||
+    msg.includes("high demand") ||
+    msg.includes("temporarily unavailable") ||
+    msg.includes("overloaded") ||
+    msg.includes("Service Unavailable") ||
+    msg.includes("try again later")
+  );
+}
+
 // Helper to detect quota exhaustion or rate limits gracefully
 function isQuotaError(err: any): boolean {
   if (!err) return false;
@@ -51,9 +71,41 @@ function isQuotaError(err: any): boolean {
 }
 
 /**
- * Resilient Gemini caller with automatic rate-limit retries, model fallback,
- * and graceful degradation from Google Search Grounding to direct AI synthesis
- * when search-specific quotas are reached.
+ * Invokes a model with retries for transient errors (503 High Demand, 500, etc.)
+ * using exponential backoff with jitter.
+ */
+async function callModelWithRetries(
+  ai: GoogleGenAI,
+  requestOptions: any,
+  maxRetries = 2
+): Promise<any> {
+  let lastErr: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent(requestOptions);
+      if (response && response.text) return response;
+    } catch (err: any) {
+      lastErr = err;
+      if (isTransientError(err) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1200 + Math.random() * 600;
+        console.info(
+          `Model ${requestOptions.model} returned transient error (503/high demand). Retrying in ${Math.round(
+            backoffMs
+          )}ms (attempt ${attempt + 1}/${maxRetries})...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Resilient Gemini caller with automatic rate-limit retries, exponential backoff for 503 high demand,
+ * model fallback, and graceful degradation from Google Search Grounding to direct AI synthesis
+ * when search-specific quotas or high demand spikes occur.
  */
 async function generateContentWithRetryAndFallback(
   ai: GoogleGenAI,
@@ -72,7 +124,7 @@ async function generateContentWithRetryAndFallback(
   // Pass 1: Try with full options (including Google Search Grounding if configured)
   for (const model of modelsToTry) {
     try {
-      const response = await ai.models.generateContent({
+      const response = await callModelWithRetries(ai, {
         ...requestOptions,
         model,
       });
@@ -81,23 +133,23 @@ async function generateContentWithRetryAndFallback(
       lastError = err;
       if (isQuotaError(err)) {
         console.info(`Gemini API quota reached for model ${model} during search grounding.`);
-        break;
+        continue;
       } else {
-        console.info(`Non-quota issue with model ${model}:`, err?.message || err);
+        console.info(`Search grounding issue with model ${model}:`, err?.message || err);
       }
     }
   }
 
-  // Pass 2: If Search Grounding was requested and failed (quota or network fetch failed),
+  // Pass 2: If Search Grounding was requested and failed (quota, 503 or network issue),
   // degrade gracefully to direct high-accuracy AI synthesis without Search Tool.
   if (requestOptions.config?.tools && requestOptions.config.tools.length > 0) {
-    console.info("Search Grounding unavailable or quota reached; falling back to direct Gemini knowledge synthesis...");
+    console.info("Search Grounding unavailable or high demand; falling back to direct Gemini knowledge synthesis...");
     const fallbackConfig = { ...requestOptions.config };
     delete fallbackConfig.tools;
 
     for (const model of modelsToTry) {
       try {
-        const response = await ai.models.generateContent({
+        const response = await callModelWithRetries(ai, {
           ...requestOptions,
           config: fallbackConfig,
           model,
@@ -107,7 +159,7 @@ async function generateContentWithRetryAndFallback(
         lastError = err;
         if (isQuotaError(err)) {
           console.info(`Gemini API quota reached for model ${model} during direct synthesis.`);
-          break;
+          continue;
         } else {
           console.info(`Fallback synthesis issue with model ${model}:`, err?.message || err);
         }
@@ -115,7 +167,7 @@ async function generateContentWithRetryAndFallback(
     }
   }
 
-  throw lastError || new Error("Gemini AI generation unavailable");
+  throw lastError || new Error("Gemini AI generation unavailable due to high demand or quota limit.");
 }
 
 function extractDomainName(rawUrl: string): string {
@@ -323,8 +375,8 @@ REGOLE CRITICHE:
    - category: una tra "Attualità", "Scienza", "Mistero", "Cultura", "Salute", "Storia", "Cinema", "Folclore"
    - title: Titolo giornalistico accattivante e veritiero
    - excerpt: Breve estratto di 2-3 righe (circa 30-40 parole)
-   - content: 3-4 paragrafi narrativi approfonditi e accurati
-   - readingTime: es. "4 min"
+   - content: 6-8 paragrafi narrativi ampi, dettagliati e coinvolgenti (almeno 600-800 parole totali), suddivisi con 2-3 sottotitoli di sezione (es. '### Titolo Sezione') per un'esperienza di lettura ricca ed esaustiva da vera rivista d'autore
+   - readingTime: es. "6 min"
    - author: Nome del giornalista o divulgatore
    - date: Data formattata (es. "22 Agosto 2026")
    - highlightQuote: Citazione o fatto chiave significativo
@@ -505,11 +557,13 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
         { category: "Salute", topic: "Benessere e Alimentazione", description: "Stili di vita sani, nutrizione e medicina." },
         { category: "Storia", topic: "Storia Contemporanea", description: "Analisi storica del Novecento." },
         { category: "Tecnologia", topic: "Intelligenza Artificiale", description: "Modelli di linguaggio, robotica e futuro digitale." },
+        { category: "Cinema", topic: "Fantascienza e Cinema", description: "Saggi sul cinema e visioni del futuro." },
+        { category: "Folclore", topic: "Miti e Tradizioni Popolari", description: "Leggende e miti del mondo." },
         { category: "Saggi", topic: "Saggio di Approfondimento", description: "Analisi multidisciplinare sui grandi temi del nostro tempo." }
       ];
 
-  const standardInterests = interests.slice(0, 8);
-  const condensedInterest = interests[8] || interests[interests.length - 1] || interests[0];
+  const standardInterests = interests.slice(0, 10);
+  const condensedInterest = interests[10] || interests[interests.length - 1] || interests[0];
 
   const todayStr = dateFormatted || new Date().toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 
@@ -696,9 +750,30 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
         );
         if (!condensedInterest) condensedInterest = remaining[remaining.length - 1];
 
-        const standardInterests = remaining.filter((i: any) => i !== condensedInterest).slice(0, 8);
+        let standardInterests = remaining.filter((i: any) => i !== condensedInterest);
+        if (standardInterests.length < 10) {
+          const defaultTopics = [
+            { category: "Attualità", topic: "Geopolitica e Grandi Cambiamenti", description: "Fatti insoliti ed evoluzioni dal mondo." },
+            { category: "Scienza", topic: "Nuove Scoperte e Biotecnologie", description: "Frontiere della ricerca e innovazioni scientifiche." },
+            { category: "Spazio", topic: "Astronomia e Costellazioni", description: "Esplorazione spaziale, esopianeti e astrofisica." },
+            { category: "Mistero", topic: "Archeologia Enigmatica e Anomala", description: "Manufatti storici non spiegati ed enigmi del passato." },
+            { category: "Cultura", topic: "Filosofia e Storia delle Idee", description: "Grandi pensatori e correnti culturali." },
+            { category: "Salute", topic: "Medicina del Futuro e Longevità", description: "Stili di vita, nutrizione e biologia cellulare." },
+            { category: "Storia", topic: "Grandi Eventi del Passato", description: "Momenti chiave e archivi storici dimenticati." },
+            { category: "Tecnologia", topic: "Intelligenza Artificiale e Robotica", description: "Modelli di linguaggio e il futuro della mente." },
+            { category: "Cinema", topic: "Storia del Cinema e Regia", description: "Capolavori cinematografici e saggistica sul film." },
+            { category: "Folclore", topic: "Miti e Tradizioni Orali", description: "Leggende e miti delle civiltà umane." }
+          ];
+          for (const def of defaultTopics) {
+            if (standardInterests.length >= 10) break;
+            if (!standardInterests.some((s: any) => s.topic === def.topic)) {
+              standardInterests.push(def);
+            }
+          }
+        }
+        standardInterests = standardInterests.slice(0, 10);
 
-        // Formatta l'elenco rigoroso degli 8 argomenti standard e dell'1 saggio condensato
+        // Formatta l'elenco rigoroso dei 10 argomenti standard e dell'1 saggio condensato
         const standardTopicsFormatted = standardInterests.map((item: any, idx: number) => {
           const p = item.priority ? `[Priorità: ${item.priority}/5]` : "";
           const cat = item.category ? `[Categoria: ${item.category}]` : "";
@@ -716,11 +791,11 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
         const systemPrompt = `Sei il Capo Redattore di "Personal Digest", prestigiosa rivista quotidiana culturale e periodico scientifico d'autore nello stile del Reader's Digest / Selezione.
 
 DIRETTIVA RIGOROSA DI MAPPATURA 1:1 CON GLI ARGOMENTI DELL'UTENTE:
-Devi generare ESATTAMENTE 9 articoli unici e approfonditi, ciascuno rigorosamente riferito a UNO e UNO SOLO dei temi assegnati:
-1. ESATTAMENTE 8 ARTICOLI STANDARD (isCondensedBook: false) corrispondenti 1:1 agli 8 temi standard indicati.
+Devi generare ESATTAMENTE 11 articoli unici e approfonditi, ciascuno rigorosamente riferito a UNO e UNO SOLO dei temi assegnati:
+1. ESATTAMENTE 10 ARTICOLI STANDARD (isCondensedBook: false) corrispondenti 1:1 ai 10 temi standard indicati.
 2. ESATTAMENTE 1 ARTICOLO CONDENSATO (isCondensedBook: true) corrispondente 1:1 al tema dell'articolo condensato.
 NON duplicare mai la stessa tematica tra due articoli. Ciascun articolo deve sviluppare un tema distinto.
-NOTA BENE: NON generare mai articoli intitolati o dedicati alla rubrica linguistica "Più parole, più idee" o "Il Libro Consigliato", che sono rubriche fisse gestite in pagine speciali dedicate a parte.
+NOTA BENE: NON generare mai articoli intitolati o dedicati alla rubrica linguistica "Più parole, più idee", "Il Libro Consigliato di Oggi" o "La Massima del Giorno", che sono rubriche fisse gestite in pagine speciali dedicate a parte.
 ${excludeDirective}
 SCANSIONE E RICERCA WEB MULTI-FONTE:
 1. Scandaglia il web aperto tramite Google Search per ciascuno dei temi assegnati: individua studi scientifici sottoposti a peer-review (Nature, Science, PNAS, Physical Review, Astrophysical Journal), archivi storici e biblioteche mondiali (Yale Beinecke, British Library, Gallica BnF, Treccani), agenzie spaziali (NASA JPL, ESA, ESO), istituti archeologici (DAI, Antiquity, UNESCO, INAH), testate culturali e cinematografiche (BFI Sight & Sound, Le Scienze, Aeon, Quanta Magazine).
@@ -728,7 +803,7 @@ SCANSIONE E RICERCA WEB MULTI-FONTE:
 3. Traduci e sintetizza in un italiano giornalistico di altissimo profilo: elegante, divulgativo, chiaro, ricco di nomi di scienziati, date storiche, parametri fisici o biologici e riferimenti documentati.
 
 FORMATO DI RISPOSTA:
-Rispondi ESCLUSIVAMENTE con un JSON strutturato con la proprietà "articles" (array di esattamente 9 articoli: 8 standard + 1 condensato):
+Rispondi ESCLUSIVAMENTE con un JSON strutturato con la proprietà "articles" (array di esattamente 11 articoli: 10 standard + 1 condensato):
 {
   "articles": [
     {
@@ -738,8 +813,8 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato con la proprietà "articles" (ar
       "title": "Titolo giornalistico approfondito, avvincente e documentato",
       "shortTitle": "Titolo sintetico (3-6 parole) per il sommario di copertina",
       "excerpt": "Sintesi narrativa di 2-3 righe (30-45 parole)",
-      "content": "Testo completo dell'articolo in 3-5 ricchi paragrafi separati da doppio a capo (\\n\\n)",
-      "readingTime": "5 min",
+      "content": "Testo completo dell'articolo. PER GLI ARTICOLI STANDARD (isCondensedBook: false): scrivi un testo ampio e articolato di 6-8 ricchi paragrafi (almeno 600-900 parole) con 2-3 sottotitoli di sezione (es. '### Titolo Sezione\\n\\nTesto...'). PER L'ARTICOLO CONDENSATO (isCondensedBook: true): scrivi un saggio monumentale di 10-14 lunghi e approfonditi paragrafi (almeno 1200-1600 parole) divisi in capitoli (es. '### Capitolo I: ...'). NON generare mai testi brevi o sintetici!",
+      "readingTime": "7 min",
       "author": "Nome del divulgatore, redattore scientifico o istituto di ricerca",
       "date": "${dateFormatted || "Oggi"}",
       "highlightQuote": "Citazione significativa o concetto cardine dell'articolo",
@@ -775,9 +850,9 @@ Data del numero: ${dateFormatted || "Oggi"}
 Indice di variazione: #${seed}
 
 Requisiti:
-- Scandaglia il web cercando paper accademici, archivi e scoperte per ognuno degli 8 temi standard e per il saggio condensato.
+- Scandaglia il web cercando paper accademici, archivi e scoperte per ognuno dei 10 temi standard e per il saggio condensato.
 - Inserisci da 2 a 4 fonti web reali e dettagliate per ciascun articolo.
-- Gli articoli 1-8 devono avere isCondensedBook: false; l'articolo 9 deve avere isCondensedBook: true.`;
+- Gli articoli 1-10 devono avere isCondensedBook: false; l'articolo 11 deve avere isCondensedBook: true.`;
 
         const response = await generateContentWithRetryAndFallback(ai, {
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],

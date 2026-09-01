@@ -597,10 +597,10 @@ export default function FlipBook({
         artIdx === 0;
 
       // Calcola quanti paragrafi mettere per foglio affinché ogni foglio stia comodamente al centro
-      // Foglio 1 include testata, titolo, autore, eventuale immagine/citazione e 2-3 paragrafi
-      // I fogli successivi contengono il continuo dei paragrafi e l'eventuale box fonti
-      if (allParagraphs.length <= 3 && !isMasterpiece) {
-        // Articolo compatto in un unico foglio
+      // Foglio 1 include testata, titolo, autore, eventuale immagine/citazione e 5-6 paragrafi (3 per capolavoro con immagine)
+      // I fogli successivi contengono 6-8 paragrafi ciascuno per riempire lo schermo in modo ricco e leggibile
+      if (allParagraphs.length <= 6 && !isMasterpiece) {
+        // Articolo compatto in un unico foglio ben riempito
         list.push({
           type: "article",
           article: art,
@@ -613,16 +613,20 @@ export default function FlipBook({
           highlightQuote: art.highlightQuote
         });
       } else {
-        // Articolo multipagina (2 o più fogli)
-        const firstSheetPars = isMasterpiece ? allParagraphs.slice(0, 2) : allParagraphs.slice(0, 3);
-        const remainingPars = isMasterpiece ? allParagraphs.slice(2) : allParagraphs.slice(3);
+        // Articolo multipagina
+        const firstSheetCount = isMasterpiece ? 3 : 5;
+        const firstSheetPars = allParagraphs.slice(0, firstSheetCount);
+        const remainingPars = allParagraphs.slice(firstSheetCount);
 
         const subChunks: string[][] = [];
-        for (let i = 0; i < remainingPars.length; i += 3) {
-          subChunks.push(remainingPars.slice(i, i + 3));
+        const chunkSize = 6;
+        if (remainingPars.length > 0) {
+          for (let i = 0; i < remainingPars.length; i += chunkSize) {
+            subChunks.push(remainingPars.slice(i, i + chunkSize));
+          }
         }
 
-        const totalSheets = 1 + Math.max(1, subChunks.length);
+        const totalSheets = 1 + subChunks.length;
 
         // Primo foglio
         list.push({
@@ -638,32 +642,19 @@ export default function FlipBook({
         });
 
         // Fogli di continuazione
-        if (subChunks.length === 0) {
+        subChunks.forEach((chunk, cIdx) => {
+          const isLastChunk = cIdx === subChunks.length - 1;
           list.push({
             type: "article",
             article: art,
-            sheetIndex: 2,
-            totalSheets: 2,
+            sheetIndex: 2 + cIdx,
+            totalSheets: totalSheets,
             articleOriginalIndex: artIdx,
-            paragraphs: [],
+            paragraphs: chunk,
             hasImage: false,
-            hasSources: true
+            hasSources: isLastChunk
           });
-        } else {
-          subChunks.forEach((chunk, cIdx) => {
-            const isLastChunk = cIdx === subChunks.length - 1;
-            list.push({
-              type: "article",
-              article: art,
-              sheetIndex: 2 + cIdx,
-              totalSheets: totalSheets,
-              articleOriginalIndex: artIdx,
-              paragraphs: chunk,
-              hasImage: false,
-              hasSources: isLastChunk
-            });
-          });
-        }
+        });
       }
     });
 
@@ -1024,23 +1015,6 @@ export default function FlipBook({
             transition: isMouseDragging ? "none" : undefined
           }}
         >
-          {/* Zona Bordo Sinistro per Voltare Pagina col Mouse */}
-          {currentPageIndex > 0 && (
-            <div
-              onClick={prevPage}
-              className="absolute left-0 top-0 bottom-0 w-12 sm:w-16 z-30 cursor-pointer"
-              title="Pagina precedente"
-            />
-          )}
-
-          {/* Zona Bordo Destro per Voltare Pagina col Mouse */}
-          {currentPageIndex < totalPages - 1 && (
-            <div
-              onClick={nextPage}
-              className="absolute right-0 top-0 bottom-0 w-12 sm:w-16 z-30 cursor-pointer"
-              title="Pagina successiva"
-            />
-          )}
           {/* ======================================================== */}
           {/* CASO 1: COPERTINA STORICA & SOMMARIO */}
           {/* ======================================================== */}
@@ -1273,21 +1247,6 @@ export default function FlipBook({
                       /* Elenco Articoli e Rubriche del Giorno Generato */
                       <>
                         <div className="space-y-2 font-serif text-sm leading-snug">
-                          {/* Voce Capolavoro d'Arte / Opera in Copertina */}
-                          <div
-                            onClick={jumpToMasterpiece}
-                            className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                            title={`Vai all'opera in copertina: ${currentMasterpiece.artworkTitle}`}
-                          >
-                            <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                              {currentMasterpiece.shortArtworkTitle || currentMasterpiece.artworkTitle}
-                            </span>
-                            <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                            <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                              {masterpiecePageNum}
-                            </span>
-                          </div>
-
                           {/* Articoli del Giorno */}
                           {regularArticles.map((art) => {
                             const pageNum = articlePageMap[art.id] ?? art.pageNumber;
@@ -1338,51 +1297,56 @@ export default function FlipBook({
                           </div>
                         )}
 
-                        {/* Rubriche del Giorno */}
-                        <div className="space-y-2 font-serif text-sm leading-snug pt-2 border-t border-white/20">
-                          {/* Riga Dedicata: Più parole, più idee (La Parola del Giorno) */}
-                          <div
-                            onClick={() => goToPage(wordPageNumber)}
-                            className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                            title={`Vai a Più parole, più idee (${dailyWord?.word || "Parola del Giorno"})`}
-                          >
-                            <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                              Più parole, più idee ({dailyWord?.word || "Parola del Giorno"})
-                            </span>
-                            <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                            <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                              {wordPageNumber}
-                            </span>
+                        {/* Rubriche Fisse del Giorno (3) */}
+                        <div className="pt-2 mt-1.5 border-t border-white/25 space-y-1">
+                          <div className="text-center font-sans font-bold text-[10px] uppercase tracking-widest text-amber-200">
+                            — RUBRICHE FISSE (3) —
                           </div>
+                          <div className="space-y-1 font-serif text-xs sm:text-sm leading-snug">
+                            {/* 1. Più parole, più idee */}
+                            <div
+                              onClick={() => goToPage(wordPageNumber)}
+                              className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                              title={`Vai a Più parole, più idee (${dailyWord?.word || "Parola del Giorno"})`}
+                            >
+                              <span className="font-serif text-xs sm:text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
+                                1. Più parole, più idee ({dailyWord?.word || "Parola del Giorno"})
+                              </span>
+                              <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                              <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
+                                {wordPageNumber}
+                              </span>
+                            </div>
 
-                          {/* Riga Dedicata: Il Libro Consigliato di Oggi */}
-                          <div
-                            onClick={() => goToPage(bookPageNumber)}
-                            className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                            title="Vai a Il Libro Consigliato di Oggi"
-                          >
-                            <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                              Il Libro Consigliato di Oggi
-                            </span>
-                            <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                            <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                              {bookPageNumber}
-                            </span>
-                          </div>
+                            {/* 2. Il Libro Consigliato di Oggi */}
+                            <div
+                              onClick={() => goToPage(bookPageNumber)}
+                              className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                              title="Vai a Il Libro Consigliato di Oggi"
+                            >
+                              <span className="font-serif text-xs sm:text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
+                                2. Il Libro Consigliato di Oggi
+                              </span>
+                              <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                              <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
+                                {bookPageNumber}
+                              </span>
+                            </div>
 
-                          {/* Riga Dedicata: La Massima del Giorno (Retro Rivista) */}
-                          <div
-                            onClick={() => goToPage(totalPages - 1)}
-                            className="group flex items-baseline justify-between cursor-pointer py-0.5"
-                            title="Vai alla Massima del Giorno (Retro Rivista)"
-                          >
-                            <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                              La Massima del Giorno
-                            </span>
-                            <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
-                            <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
-                              {totalPages - 1}
-                            </span>
+                            {/* 3. La Massima del Giorno */}
+                            <div
+                              onClick={() => goToPage(totalPages - 1)}
+                              className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                              title="Vai alla Massima del Giorno (Retro Rivista)"
+                            >
+                              <span className="font-serif text-xs sm:text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
+                                3. La Massima del Giorno
+                              </span>
+                              <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                              <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
+                                {totalPages - 1}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </>
