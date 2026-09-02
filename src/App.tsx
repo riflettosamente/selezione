@@ -684,10 +684,44 @@ const CATEGORIES = [
 ] as const;
 
 export default function App() {
-  const [liveWebArticles, setLiveWebArticles] = useState<Article[]>([]);
+  const [liveWebArticles, setLiveWebArticles] = useState<Article[]>(() => {
+    try {
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const saved = localStorage.getItem(`personal_digest_daily_articles_${todayKey}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 8) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [isSearchingWeb, setIsSearchingWeb] = useState<boolean>(false);
-  const [searchStatus, setSearchStatus] = useState<"idle" | "searching" | "success" | "quota_limited" | "error">("idle");
-  const [groundingQueries, setGroundingQueries] = useState<string[]>([]);
+  const [searchStatus, setSearchStatus] = useState<"idle" | "searching" | "success" | "quota_limited" | "error">(() => {
+    try {
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const saved = localStorage.getItem(`personal_digest_daily_articles_${todayKey}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 8) {
+          return "success";
+        }
+      }
+    } catch {}
+    return "idle";
+  });
+  const [groundingQueries, setGroundingQueries] = useState<string[]>(() => {
+    try {
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const saved = localStorage.getItem(`personal_digest_daily_queries_${todayKey}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState<boolean>(false);
 
   // Data corrente per la generazione e aggiornamento automatico alle ore 00:00
@@ -743,22 +777,45 @@ export default function App() {
     return userInterests.map((i) => `${i.id || i.topic}_${i.enabled !== false ? "1" : "0"}`).join(";");
   }, [userInterests]);
 
-  const [liveMasterpiece, setLiveMasterpiece] = useState<ArtMasterpiece | null>(null);
+  const [liveMasterpiece, setLiveMasterpiece] = useState<ArtMasterpiece | null>(() => {
+    try {
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const saved = localStorage.getItem(`personal_digest_art_masterpiece_${todayKey}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.artworkTitle && parsed.article) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
 
-  // Caricamento del capolavoro d'arte tramite Ricerca Web Live con Google Search (senza cache)
+  // Caricamento del capolavoro d'arte tramite Ricerca Web Live con Google Search (generato una volta al giorno a inizio giornata)
   useEffect(() => {
     let isMounted = true;
+    const todayArtKey = `personal_digest_art_masterpiece_${todayKey}`;
 
-    // Pulizia di eventuali vecchie chiavi di cache per l'arte da localStorage
+    // Pulizia di eventuali vecchie chiavi di cache per l'arte dei giorni precedenti
     try {
       Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith("personal_digest_art_web_")) {
+        if (key.startsWith("personal_digest_art_") && key !== todayArtKey) {
           localStorage.removeItem(key);
         }
       });
     } catch {}
 
-    setLiveMasterpiece(null);
+    // Controlla se abbiamo già il capolavoro memorizzato per la giornata odierna
+    try {
+      const saved = localStorage.getItem(todayArtKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.artworkTitle && parsed.article) {
+          setLiveMasterpiece(parsed);
+          return;
+        }
+      }
+    } catch {}
 
     const fetchLiveMasterpiece = async () => {
       try {
@@ -771,7 +828,7 @@ export default function App() {
             seed: daySeed,
             excludeArtworks,
             excludeArtists,
-            forceRefresh: true
+            forceRefresh: false
           }),
         });
         if (res.ok) {
@@ -787,6 +844,9 @@ export default function App() {
               }
             };
             setLiveMasterpiece(verifiedMasterpiece);
+            try {
+              localStorage.setItem(todayArtKey, JSON.stringify(verifiedMasterpiece));
+            } catch {}
           }
         }
       } catch (err) {
@@ -798,7 +858,7 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [daySeed, userInterests]);
+  }, [daySeed, userInterests, todayKey]);
 
   // Capolavoro d'arte del giorno selezionato (priorità assoluta alla Ricerca Web live)
   const activeMasterpiece = useMemo(() => {
@@ -839,23 +899,47 @@ export default function App() {
     return [];
   });
 
-  // Caricamento e ricerca live degli articoli del giorno generati per la data corrente (aggiornati ogni giorno alle 00:00)
-  // Eliminazione completa della cache di sistema per garantire che ad ogni riapertura o nuovo giorno vengano generati esclusivamente i nuovi articoli
+  // Caricamento e ricerca live degli articoli del giorno generati per la data corrente (aggiornati una volta sola alle ore 00:00 del nuovo giorno)
   const fetchLiveDailyArticles = useCallback(async () => {
-    const { excludeIds, excludeTitles } = getExcludedHistoryFromDb();
+    const todayArticlesKey = `personal_digest_daily_articles_${todayKey}`;
+    const todayQueriesKey = `personal_digest_daily_queries_${todayKey}`;
 
-    // Pulizia di eventuali vecchie chiavi di cache degli articoli da localStorage
+    // Pulizia di eventuali vecchie chiavi di cache degli articoli dei giorni precedenti
     try {
       Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith("personal_digest_daily_articles_") || key.startsWith("personal_digest_art_web_")) {
+        if (key.startsWith("personal_digest_daily_articles_") && key !== todayArticlesKey) {
+          localStorage.removeItem(key);
+        }
+        if (key.startsWith("personal_digest_daily_queries_") && key !== todayQueriesKey) {
           localStorage.removeItem(key);
         }
       });
     } catch {}
 
+    // Se gli articoli per oggi sono già memorizzati localmente, caricali senza chiamare l'API
+    try {
+      const saved = localStorage.getItem(todayArticlesKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 8) {
+          setLiveWebArticles(parsed);
+          const savedQueries = localStorage.getItem(todayQueriesKey);
+          if (savedQueries) {
+            try {
+              setGroundingQueries(JSON.parse(savedQueries));
+            } catch {}
+          }
+          setSearchStatus("success");
+          setIsSearchingWeb(false);
+          return;
+        }
+      }
+    } catch {}
+
+    const { excludeIds, excludeTitles } = getExcludedHistoryFromDb();
+
     setIsSearchingWeb(true);
     setSearchStatus("searching");
-    setLiveWebArticles([]);
 
     try {
       const res = await fetch("/api/articles/daily", {
@@ -867,7 +951,7 @@ export default function App() {
           seed: daySeed,
           excludeIds,
           excludeTitles,
-          forceRefresh: true
+          forceRefresh: false
         })
       });
 
@@ -879,8 +963,14 @@ export default function App() {
           setSearchStatus("quota_limited");
         } else if (data && Array.isArray(data.articles) && data.articles.length > 0) {
           setLiveWebArticles(data.articles);
+          try {
+            localStorage.setItem(todayArticlesKey, JSON.stringify(data.articles));
+          } catch {}
           if (Array.isArray(data.webSearchQueries)) {
             setGroundingQueries(data.webSearchQueries);
+            try {
+              localStorage.setItem(todayQueriesKey, JSON.stringify(data.webSearchQueries));
+            } catch {}
           }
           setSearchStatus("success");
         } else {
@@ -895,7 +985,7 @@ export default function App() {
     } finally {
       setIsSearchingWeb(false);
     }
-  }, [daySeed, userInterests, articleDateFormatted]);
+  }, [daySeed, userInterests, articleDateFormatted, todayKey]);
 
   useEffect(() => {
     fetchLiveDailyArticles();

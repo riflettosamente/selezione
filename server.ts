@@ -952,6 +952,12 @@ Requisiti:
         if (isQuotaError(aiErr)) {
           console.info("Gemini API quota reached / rate limited in /api/articles/daily. Serving dynamic fallback articles for interests.");
           const fallbackArticles = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+          dailyArticlesCache.set(cacheKey, {
+            articles: fallbackArticles,
+            groundingSources: [],
+            webSearchQueries: [],
+            timestamp: Date.now()
+          });
           return res.json({
             success: true,
             quotaExceeded: true,
@@ -962,6 +968,12 @@ Requisiti:
         }
         console.warn("Gemini API search error in /api/articles/daily:", aiErr?.message || aiErr);
         const fallbackArticles = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+        dailyArticlesCache.set(cacheKey, {
+          articles: fallbackArticles,
+          groundingSources: [],
+          webSearchQueries: [],
+          timestamp: Date.now()
+        });
         return res.json({
           success: true,
           articles: fallbackArticles,
@@ -972,6 +984,12 @@ Requisiti:
     }
 
     const fallbackArticles = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+    dailyArticlesCache.set(cacheKey, {
+      articles: fallbackArticles,
+      groundingSources: [],
+      webSearchQueries: [],
+      timestamp: Date.now()
+    });
     return res.json({
       success: true,
       articles: fallbackArticles,
@@ -2225,6 +2243,8 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato valido:
       fallbackMasterpiece.imageUrl = resolvedFallbackImage;
       fallbackMasterpiece.article.imageUrl = resolvedFallbackImage;
     }
+
+    artMasterpieceCache.set(cacheKey, { masterpiece: fallbackMasterpiece, timestamp: Date.now() });
 
     res.json({
       success: true,
