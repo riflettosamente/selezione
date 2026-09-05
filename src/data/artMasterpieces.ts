@@ -45,6 +45,36 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
   url: string;
   keywords: string[];
 }> = {
+  "baia-mosaico-sommerso": {
+    title: "I Mosaici del Ninfeo Sommerso di Baia (Portus Julius)",
+    artist: "Maestri Mosaicisti Romani dei Campi Flegrei",
+    year: "I secolo d.C.",
+    museum: "Parco Archeologico Sommerso di Baia e Museo Archeologico dei Campi Flegrei",
+    city: "Baia / Bacoli (Napoli), Italia",
+    artworkType: "Mosaico Pavimentale Romano Sommerso",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
+    keywords: ["baia", "archeologia", "subacquea", "sommerso", "sommersa", "flegrei", "campi flegrei", "bacoli", "portus julius", "mosaico", "scavi subacquei", "archeologica", "villa dei pisoni", "ninfeo"]
+  },
+  "bronzi-di-riace": {
+    title: "I Bronzi di Riace",
+    artist: "Maestro di Fidia / Scuola Greca Classica",
+    year: "V secolo a.C. (circa 460–450 a.C.)",
+    museum: "Museo Archeologico Nazionale di Reggio Calabria (MArRC)",
+    city: "Reggio Calabria, Italia",
+    artworkType: "Scultura Greca in Bronzo a Cera Persa",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Bronzi_di_riace%2C_V_secolo_ac._01.jpg/1280px-Bronzi_di_riace%2C_V_secolo_ac._01.jpg",
+    keywords: ["riace", "bronzi di riace", "archeologia", "scavi subacquei", "subacquea", "marrc", "statua in bronzo", "grecia classica"]
+  },
+  "alessandro-mosaico": {
+    title: "Mosaico di Alessandro (La Battaglia di Isso)",
+    artist: "Maestri Mosaicisti Ellenistico-Romani della Casa del Fauno",
+    year: "100 a.C. circa",
+    museum: "Museo Archeologico Nazionale di Napoli (MANN)",
+    city: "Napoli, Italia",
+    artworkType: "Mosaico Romano in Opus Vermiculatum",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Alexander_the_Great_mosaic.jpg/1280px-Alexander_the_Great_mosaic.jpg",
+    keywords: ["alessandro", "mosaico di alessandro", "pompei", "mann", "casa del fauno", "battaglia di isso", "archeologia", "mosaico"]
+  },
   "cajal-neuroni": {
     title: "Disegno Istologico dei Neuroni della Corteccia Cerebrale",
     artist: "Santiago Ramón y Cajal",
@@ -53,7 +83,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     city: "Madrid, Spagna",
     artworkType: "Disegno Scientifico Originale / Inchiostro",
     url: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Cajal_cortex_drawings.png",
-    keywords: ["cajal", "ramon y cajal", "neuroni", "corteccia", "cervello", "neuroscienze", "mente", "sinapsi", "disegno istologico", "purkinje", "cervelletto"]
+    keywords: ["cajal", "ramon y cajal", "neuroni", "corteccia", "cervello", "neuroscienze", "mente", "sinapsi", "disegno istologico", "genetica", "dna", "crispr", "editing", "cellule"]
   },
   "cajal-purkinje": {
     title: "Cellule del cervelletto (Purkinje cell)",
@@ -63,7 +93,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     city: "Madrid, Spagna",
     artworkType: "Disegno Scientifico Originale / Inchiostro",
     url: "https://upload.wikimedia.org/wikipedia/commons/6/6f/CajalCerebellum.jpg",
-    keywords: ["purkinje", "cervelletto", "cajal", "ramón y cajal", "neuroscienze", "dendriti", "sinapsi"]
+    keywords: ["purkinje", "cervelletto", "cajal", "ramón y cajal", "neuroscienze", "dendriti", "sinapsi", "genetica"]
   },
   "leonardo-uomo-vitruviano": {
     title: "L'Uomo Vitruviano",
@@ -73,7 +103,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     city: "Venezia",
     artworkType: "Disegno a Penna e Inchiostro",
     url: "https://upload.wikimedia.org/wikipedia/commons/2/22/Da_Vinci_Vitruve_Luc_Viatour.jpg",
-    keywords: ["vitruviano", "uomo vitruviano", "leonardo", "da vinci", "anatomia", "proporzioni", "geometria", "scienza"]
+    keywords: ["vitruviano", "uomo vitruviano", "leonardo", "da vinci", "anatomia", "proporzioni", "geometria", "scienza", "tecnologia", "intelligenza artificiale", "ai"]
   },
   "galileo-fasi-lunari": {
     title: "Disegni delle Fasi e dei Crateri Lunari (Sidereus Nuncius)",
@@ -82,18 +112,18 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     museum: "Biblioteca Nazionale Centrale di Firenze",
     city: "Firenze",
     artworkType: "Bozzetto Astronomico ad Acquerello",
-    url: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Galileo_Moon_drawings_1610.jpg",
-    keywords: ["galileo", "luna", "sidereus nuncius", "galilei", "astronomia", "telescopio", "spazio", "crateri"]
+    url: "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
+    keywords: ["galileo", "luna", "sidereus nuncius", "galilei", "astronomia", "telescopio", "spazio", "crateri", "james webb", "galassie", "cosmo"]
   },
   "haeckel-kunstformen": {
-    title: "Kunstformen der Natur (Forme d'Arte della Natura: Discomedusae)",
+    title: "Kunstformen der Natur (Forme d'Arte della Natura: Actiniae)",
     artist: "Ernst Haeckel",
     year: "1899-1904",
     museum: "Ernst-Haeckel-Haus",
     city: "Jena, Germania",
     artworkType: "Litografia Scientifica a Colori",
-    url: "https://upload.wikimedia.org/wikipedia/commons/b/b8/Haeckel_Discomedusae.jpg",
-    keywords: ["haeckel", "kunstformen", "meduse", "discomedusae", "biologia", "natura", "evoluzione", "tavola biologica"]
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Haeckel_Actiniae.jpg/1280px-Haeckel_Actiniae.jpg",
+    keywords: ["haeckel", "kunstformen", "actiniae", "anemoni", "meduse", "biologia", "natura", "evoluzione", "tavola biologica", "mare profondo"]
   },
   "escher-relativita": {
     title: "Relatività (Relativity)",
@@ -122,7 +152,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     museum: "British Museum",
     city: "Londra",
     artworkType: "Incisione all'Acquaforte e Acquerello",
-    url: "https://upload.wikimedia.org/wikipedia/commons/9/90/The_Ancient_of_Days%2C_Europe_a_Prophecy%2C_copy_K%2C_plate_1_%28Bentley_1%29%2C_1821_%28Fitzwilliam_Museum%29.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/7/74/William_Blake_002.jpg",
     keywords: ["blake", "ancient of days", "grande architetto", "compasso", "cosmologia", "universo", "william blake"]
   },
   "wright-uccello-pompa": {
@@ -159,7 +189,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1482 circa",
     museum: "Galleria degli Uffizi",
     city: "Firenze",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Botticelli-primavera.jpg/1280px-Botticelli-primavera.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/3/3c/Botticelli-primavera.jpg",
     keywords: ["primavera", "allegoria della primavera", "botticelli"]
   },
   "michelangelo-creazione-adamo": {
@@ -168,7 +198,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1511-1512",
     museum: "Musei Vaticani, Cappella Sistina",
     city: "Città del Vaticano",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/1200px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
     keywords: ["michelangelo", "creazione di adamo", "sistina", "adamo", "mente divina", "cervello", "buonarroti"]
   },
   "michelangelo-david": {
@@ -177,7 +207,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1501-1504",
     museum: "Galleria dell'Accademia",
     city: "Firenze",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/%27David%27_by_Michelangelo_Fir_JBU005_edit.jpg/800px-%27David%27_by_Michelangelo_Fir_JBU005_edit.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/a/a0/%27David%27_by_Michelangelo_Fir_JBU005_edit.jpg",
     keywords: ["david", "michelangelo", "accademia", "marmo di carrara"]
   },
   "van-gogh-notte-stellata": {
@@ -186,7 +216,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1889",
     museum: "Museum of Modern Art (MoMA)",
     city: "New York",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
     keywords: ["van gogh", "notte stellata", "starry night", "moma", "turbolenza", "vortici", "gogh", "saint-rémy"]
   },
   "van-gogh-girasoli": {
@@ -195,7 +225,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1888",
     museum: "National Gallery",
     city: "Londra",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Vincent_Willem_van_Gogh_127.jpg/1200px-Vincent_Willem_van_Gogh_127.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/4/46/Vincent_Willem_van_Gogh_127.jpg",
     keywords: ["girasoli", "van gogh", "sunflowers", "arles"]
   },
   "raffaello-scuola-di-atene": {
@@ -213,7 +243,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1831 circa",
     museum: "British Museum / Tokyo National Museum",
     city: "Londra / Tokyo",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Tsunami_by_hokusai_19th_century.jpg/1280px-Tsunami_by_hokusai_19th_century.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg",
     keywords: ["hokusai", "grande onda", "kanagawa", "onda", "monte fuji", "ukiyo-e", "katsushika"]
   },
   "disco-di-festo": {
@@ -222,7 +252,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1700 a.C. circa",
     museum: "Museo Archeologico di Heraklion",
     city: "Creta, Grecia",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Phaistos_disc_side_A_color.jpg/1200px-Phaistos_disc_side_A_color.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Alexander_the_Great_mosaic.jpg/1280px-Alexander_the_Great_mosaic.jpg",
     keywords: ["festo", "disco di festo", "phaistos", "minoici", "creta", "glifi", "geroglifici"]
   },
   "leonardo-monna-lisa": {
@@ -240,7 +270,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1495-1498",
     museum: "Santa Maria delle Grazie",
     city: "Milano",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/The_Last_Supper_-_Leonardo_Da_Vinci_-_High_Resolution_32x16.jpg/1280px-The_Last_Supper_-_Leonardo_Da_Vinci_-_High_Resolution_32x16.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/4/48/The_Last_Supper_-_Leonardo_Da_Vinci_-_High_Resolution_32x16.jpg",
     keywords: ["cenacolo", "ultima cena", "last supper", "leonardo"]
   },
   "caravaggio-vocazione-san-matteo": {
@@ -267,7 +297,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1665 circa",
     museum: "Mauritshuis",
     city: "L'Aia, Paesi Bassi",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/1665_Girl_with_a_Pearl_Earring.jpg/1200px-1665_Girl_with_a_Pearl_Earring.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/0/0f/1665_Girl_with_a_Pearl_Earring.jpg",
     keywords: ["vermeer", "orecchino", "perla", "turbante", "mauritshuis", "johannes vermeer"]
   },
   "klimt-il-bacio": {
@@ -285,7 +315,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1872",
     museum: "Musée Marmottan Monet",
     city: "Parigi",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Monet_-_Impression%2C_Sunrise.jpg/1280px-Monet_-_Impression%2C_Sunrise.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/5/59/Monet_-_Impression%2C_Sunrise.jpg",
     keywords: ["monet", "impressione", "soleil levant", "impressionismo", "marmottan", "claude monet"]
   },
   "friedrich-viandante-nebbia": {
@@ -294,7 +324,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1818",
     museum: "Hamburger Kunsthalle",
     city: "Amburgo, Germania",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg/1200px-Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg/1280px-Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
     keywords: ["friedrich", "viandante", "nebbia", "wanderer", "romantico", "sublime", "caspar david"]
   },
   "velazquez-las-meninas": {
@@ -456,13 +486,13 @@ In seguito al tracollo finanziario e alla condanna per truffa di Gaspare del Lam
     matchingCategory: "Scienza dello Spirito",
     matchingTopic: "Ricerche sulla Coscienza (NDE, OOBE)",
     whyConnected: "Ispirato all'interesse 'Ricerche sulla Coscienza (NDE, OOBE)': gli studi neuroanatomici moderni hanno dimostrato che il manto divino di Michelangelo riproduce con esattezza la sezione sagittale del cervello umano, simboleggiando la scintilla della mente e della consapevolezza.",
-    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/1200px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
     coverAccentColor: "from-indigo-950 via-slate-800 to-amber-950",
     article: {
       id: "capolavori-michelangelo-creazione-adamo",
       pageNumber: 1,
       category: "Arte",
-      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/1200px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
+      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
       title: "Capolavori dell'Umanità: Il Cervello Nascosto nella «Creazione di Adamo» di Michelangelo",
       shortTitle: "Capolavori: Michelangelo e la Mente Divina",
       excerpt: "Affrescata tra il 1511 e il 1512 nella volta della Sistina: l'indagine medica e storico-artistica che ha svelato la perfetta sagoma del cervello umano nel manto dell'Eterno.",
@@ -781,6 +811,212 @@ Esposto al Museo Archeologico di Heraklion insieme agli affreschi di Cnosso e ai
           title: "Istituto di Studi Egei e Micenei (CNR) - Ricerche sul Disco di Festo e la Lineare A",
           url: "https://www.cnr.it/",
           publisher: "CNR Italia",
+          originalLanguage: "Italiano"
+        }
+      ]
+    }
+  },
+  {
+    id: "capolavori-baia-mosaico-sommerso",
+    artworkTitle: "I Mosaici del Ninfeo Sommerso di Baia (Portus Julius)",
+    artist: "Maestri Mosaicisti Romani dei Campi Flegrei",
+    shortArtworkTitle: "ARTE ROMANA: Mosaici di Baia Sommersa (I sec. d.C.)",
+    year: "I secolo d.C.",
+    museum: "Parco Archeologico Sommerso di Baia e Museo Archeologico dei Campi Flegrei",
+    city: "Baia / Bacoli (Napoli), Italia",
+    matchingCategory: "Archeologia",
+    matchingTopic: "Nuove scoperte archeologiche subacquee a Baia",
+    whyConnected: "Ispirato direttamente all'interesse 'Nuove scoperte archeologiche subacquee a Baia': i sontuosi mosaici pavimentali romani a tessere bianche e nere, adagiati sul fondale del Golfo di Pozzuoli, testimoniano lo sfarzo delle antiche residenze patrizie riscoperte oggi con tecnologie di rilievo 3D subacqueo.",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
+    coverAccentColor: "from-cyan-950 via-teal-900 to-slate-950",
+    article: {
+      id: "capolavori-baia-mosaico-sommerso",
+      pageNumber: 1,
+      category: "Arte",
+      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
+      title: "Capolavori dell'Umanità: L'Atlantide Romana e i Mosaici Sommersi di Baia",
+      shortTitle: "Capolavori: I Mosaici Sommersi di Baia",
+      excerpt: "Nelle acque del Golfo di Pozzuoli a cinque metri di profondità: i mosaici geometrici e figurati delle ville patrizie romane restituiti alla luce dalle campagne di scavo subacqueo.",
+      content: `SCHEDA CRITICA DELL'OPERA:
+Titolo: Mosaico Pavimentale del Ninfeo Sommerso (Villa a Protiro / Portus Julius)
+Autore: Maestri mosaicisti e architetti romani di età giulio-claudia e antonina
+Datazione: I - II secolo d.C.
+Tecnica e Supporto: Tessere di marmo bianco e calcare nero in opus tessellatum su calce idraulica pozzolanica
+Collocazione Attuale: Parco Sommerso di Baia (Area Marina Protetta, Napoli) / Museo Archeologico dei Campi Flegrei nel Castello di Baia
+
+1. LA PICCOLA ATLANTIDE ROMANA E IL BRADISEISMO:
+Adagiata sulla costa flegrea a pochi chilometri da Cuma e Pozzuoli, Baia era nell'antichità romana la più celebre ed esclusiva stazione termale e balneare dell'aristocrazia imperiale. Qui sorgevano le lussuose dimore di Giulio Cesare, Cicerone, Nerone e Adriano. Tra il IV e l'VIII secolo d.C., il singolare fenomeno geologico vulcanico del bradiseismo provocò un graduale e inesorabile sprofondamento della fascia costiera fino a sette-otto metri sotto il livello del mare. L'antica linea di costa, con i suoi ninfei monumentali, le terme private, le banchine marittime del Portus Julius e i viali lastricati, fu sommersa e preservata dall'azione coprente dei sedimenti sabbiosi marini.
+
+2. LE RIVOLUZIONARIE SCOPERTE ARCHEOLOGICHE SUBACQUEE (1969 - OGGI):
+Identificato per la prima volta negli anni Venti da fotografie aeree della Regia Aeronautica e investigato sistematicamente a partire dagli anni Sessanta dall'archeologo Nino Lamboglia, il sito di Baia sommersa ha vissuto negli ultimi anni una vera rinascita grazie all'impiego di droni sottomarini autonomi (AUV), fotogrammetria digitale 3D ad altissima risoluzione e tecniche di micro-scavo a bassa turbolenza. Gli archeologi subacquei hanno riportato alla luce interi ambienti intatti:
+- Il grande mosaico della Villa a Protiro con motivi geometrici a meandro ed esagoni intrecciati;
+- Il Ninfeo dell'imperatore Claudio a Punta Epitaffio con le straordinarie statue raffiguranti Ulisse e Baios che offrono la coppa di vino a Polifemo;
+- I resti monumentali delle terme e delle canalizzazioni in piombo con i bolli imperiali incisi.
+
+3. LA MAESTRIA DEL MOSAICO IN OPUS TESSELLATUM:
+Il mosaico pavimentale preservato sul fondale testimonia l'eccezionale maestria tecnica dei mosaicisti campani:
+- Le tessere, intagliate a mano con dimensioni millimetriche (circa 6-8 mm di lato), sono state allettate su un resistente strato di malta pozzolanica idraulica, resistente per oltre duemila anni all'erosione dell'acqua marina;
+- Il contrasto bicromatico tra il bianco candido del marmo apuano e il nero profondo della pietra calcarea locale crea un sofisticato effetto ottico geometrico (trompe-l'œil prospettico), tipico delle sale di rappresentanza e dei triclini dove i patrizi banchettavano con vista sul mare;
+- I restauratori subacquei dell'ICR (Istituto Centrale per il Restauro) hanno ideato un innovativo protocollo biologico con geotessili e barriere d'aria per proteggere i mosaici dall'aggressione biologica di spugne perforatrici e biofouling marino.
+
+4. DIALOGO TRA ARCHEOLOGIA DEL MARE E TECNOLOGIA CONTEMPORANEA:
+La tutela di Baia rappresenta oggi l'avanguardia mondiale dell'archeologia subacquea: i visitatori possono ammirare i mosaici attraverso battelli con fondo trasparente o immersioni guidate, mentre i laboratori di ricerca digitalizzano ogni singola tessera per monitorare i movimenti micrometrici del fondale causati dall'attività magmatica dei Campi Flegrei.
+
+5. UN PATRIMONIO SENZA EGUALI:
+I mosaici di Baia sommersa uniscono in modo inestricabile la potenza della natura e il genio artistico dell'antica Roma, restituendo la testimonianza palpabile di una civiltà che fece del connubio tra architettura, lusso e paesaggio marino il proprio vertice estetico.`,
+      readingTime: "7 min",
+      author: "Redazione Archeologia Subacquea & Beni Culturali",
+      date: "Agosto 2026",
+      highlightQuote: "A cinque metri sotto il mare di Baia, i mosaici imperiali riemergono intatti: la più straordinaria testimonianza al mondo di archeologia subacquea.",
+      originalLanguage: "Italiano",
+      sources: [
+        {
+          title: "Parco Archeologico dei Campi Flegrei - Parco Sommerso di Baia",
+          url: "https://pafleg.cultura.gov.it/it/parco-sommerso-di-baia",
+          publisher: "Ministero della Cultura (MiC)",
+          originalLanguage: "Italiano"
+        },
+        {
+          title: "ISCR - Istituto Centrale per il Restauro: Il Restauro dei Mosaici Sommersi di Baia",
+          url: "https://icr.beniculturali.it/",
+          publisher: "ICR Italia",
+          originalLanguage: "Italiano"
+        }
+      ]
+    }
+  },
+  {
+    id: "capolavori-cajal-neuroni-corteccia",
+    artworkTitle: "Disegno Istologico dei Neuroni della Corteccia Cerebrale",
+    artist: "Santiago Ramón y Cajal",
+    shortArtworkTitle: "CAJAL: I Neuroni della Corteccia (1899)",
+    year: "1899",
+    museum: "Instituto Cajal - CSIC",
+    city: "Madrid, Spagna",
+    matchingCategory: "Scienza & Medicina",
+    matchingTopic: "Genetica, DNA, CRISPR & Neuroscienze",
+    whyConnected: "Ispirato direttamente a 'Prime Editing e genetica avanzata' e alla biologia moderna: i disegni originali a china di Santiago Ramón y Cajal uniscono sublime maestria grafica e rigore microscopico, rivelando la morfologia della cellula nervosa e aprendo la strada alla moderna biologia molecolare.",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Cajal_cortex_drawings.png",
+    coverAccentColor: "from-amber-950 via-stone-900 to-zinc-950",
+    article: {
+      id: "capolavori-cajal-neuroni-corteccia",
+      pageNumber: 1,
+      category: "Arte",
+      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Cajal_cortex_drawings.png",
+      title: "Capolavori dell'Umanità: I Capolavori Istologici di Santiago Ramón y Cajal",
+      shortTitle: "Capolavori: Cajal e la Foresta dei Neuroni",
+      excerpt: "Realizzati a inchiostro di china alla fine dell'Ottocento: i disegni con cui il fondatore delle moderne neuroscienze svelò l'architettura dei neuroni e delle sinapsi.",
+      content: `SCHEDA CRITICA DELL'OPERA:
+Titolo: Struttura della Corteccia Cerebrale Umana e Dendriti Piramidali
+Autore: Santiago Ramón y Cajal (Petilla de Aragón 1852 – Madrid 1934, Premio Nobel per la Medicina 1906)
+Datazione: 1899 circa
+Tecnica e Supporto: Inchiostro di china nero e seppia con grafite su carta pesante (32 × 24 cm)
+Collocazione Attuale: Archivio Storico dell'Instituto Cajal (CSIC), Madrid, Spagna (Patrimonio UNESCO Memory of the World)
+
+1. L'ARTISTA DIVENTATO SCIENZIATO:
+Pochi sanno che Santiago Ramón y Cajal, universalmente celebrato come il padre delle neuroscienze moderne, aspirò per tutta la giovinezza a diventare un pittore accademico. Fu il padre, medico chirurgo, a spingerlo verso la facoltà di medicina. Quella passione per il disegno non andò tuttavia perduta: divenne lo strumento investigativo supremo che permise a Cajal di rivoluzionare la comprensione della vita biologica. Alla fine dell'Ottocento le fotocamere accoppiate ai microscopi ottici erano rozze e incapaci di cogliere la profondità dei piani cellulari. Cajal osservava per ore i preparati istologici e poi, a memoria e a mano libera, tracciava con un pennino di precisione i singoli alberi dendritici con una purezza grafica paragonabile ai maestri della calligrafia giapponese o ai disegni anatomici di Leonardo da Vinci.
+
+2. LA DOTTRINA DEL NEURONE CONTRO IL RETICOLARISMO:
+Fino al 1888 la comunità scientifica internazionale, capeggiata dal luminare italiano Camillo Golgi (con cui Cajal condivise il Nobel nel 1906), sosteneva la 'teoria reticolare': il cervello sarebbe stato una rete fusa e ininterrotta di filamenti citoplasmatici (sincizio continuo).
+Utilizzando e perfezionando la reazione nera al nitrato d'argento ideata proprio da Golgi, Cajal compì l'intuizione fondamentale:
+- I neuroni non sono fusi tra loro, ma sono 'unità anatomiche, genetiche e funzionali indipendenti';
+- Ciascuna cellula possiede un corpo (soma), un asse di trasmissione (assone) e una ramificazione ricevente (dendriti);
+- Il passaggio dell'impulso nervoso avviene per contiguità attraverso minuscole fessure microscopiche (chiamate in seguito 'sinapsi' da Charles Sherrington);
+- Formulò la celebre 'Legge della Polarizzazione Dinamica', secondo cui le informazioni viaggiano sempre in modo unidirezionale: dai dendriti verso l'assone.
+
+3. L'ESTETICA DELLA «FORESTA INTRICATA»:
+Nelle sue memorie Cajal descrisse il tessuto cerebrale con metafore liriche indimenticabili: «Il giardino della neurologia offre allo studioso spettacoli affascinanti e sensazioni artistiche ineguagliabili. Le mie muse furono le cellule giganti della corteccia cerebrale... una foresta misteriosa dove con alberi dalle ramificazioni infinite e sottili come ragnatele l'anima intesse i suoi pensieri».
+Nei suoi fogli a china le cellule piramidali si stagliano come querce antiche, mentre gli interneuroni a candelabro sembrano costellazioni o alghe marine fluttuanti nell'etere biologico.
+
+4. DALL'ISTOLOGIA AL PRIME EDITING E ALLA GENOMICA:
+I disegni di Cajal rimangono ancora oggi insuperati per chiarezza e potere sintetico: non sono semplici copie meccaniche della natura, ma autentiche astrazioni interpretative che evidenziano i flussi di informazione biologica. Da questa comprensione microscopica derivano direttamente tutte le conquiste contemporanee della neurogenetica, dalla manipolazione mirata dei geni con il Prime Editing alla ricostruzione del connettoma umano.
+
+5. RICONOSCIMENTO UNESCO:
+Nel 2017 l'UNESCO ha inserito i 2.800 disegni originali di Santiago Ramón y Cajal nel Registro della Memoria del Mondo, consacrandoli come monumenti imperituri in cui scienza, precisione empirica e vertice estetico coincidono in assoluta armonia.`,
+      readingTime: "7 min",
+      author: "Redazione Neuroscienze & Storia dell'Arte",
+      date: "Agosto 2026",
+      highlightQuote: "A mano libera e con inchiostro di china, Cajal disegnò la foresta dei neuroni: il vertice in cui l'arte grafica svelò il segreto della mente e del codice biologico.",
+      originalLanguage: "Italiano",
+      sources: [
+        {
+          title: "Instituto Cajal (CSIC) - Legado Santiago Ramón y Cajal",
+          url: "https://www.cajal.csic.es/",
+          publisher: "Consejo Superior de Investigaciones Científicas",
+          originalLanguage: "Spagnolo"
+        },
+        {
+          title: "UNESCO - The Archives of Santiago Ramón y Cajal (Memory of the World)",
+          url: "https://www.unesco.org/en/memory-world",
+          publisher: "UNESCO",
+          originalLanguage: "Inglese"
+        }
+      ]
+    }
+  },
+  {
+    id: "capolavori-galilei-luna-sidereus",
+    artworkTitle: "Disegni delle Fasi e dei Crateri Lunari (Sidereus Nuncius)",
+    artist: "Galileo Galilei",
+    shortArtworkTitle: "GALILEI: I Crateri della Luna (1610)",
+    year: "1609-1610",
+    museum: "Biblioteca Nazionale Centrale di Firenze",
+    city: "Firenze, Italia",
+    matchingCategory: "Astronomia & Spazio",
+    matchingTopic: "James Webb Space Telescope e le prime galassie",
+    whyConnected: "Ispirato all'interesse 'James Webb Space Telescope e le prime galassie' e alla frontiera dello spazio: i bozzetti ad acquerello della superficie lunare dipinti da Galileo al cannocchiale segnarono la nascita dell'astronomia moderna, precorrendo di quattro secoli gli sguardi cosmici dei telescopi spaziali.",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
+    coverAccentColor: "from-slate-950 via-sky-950 to-amber-950",
+    article: {
+      id: "capolavori-galilei-luna-sidereus",
+      pageNumber: 1,
+      category: "Arte",
+      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
+      title: "Capolavori dell'Umanità: Gli Acquerelli della Luna di Galileo Galilei (1609)",
+      shortTitle: "Capolavori: Galileo e la Luna Imperfetta",
+      excerpt: "Realizzati tra l'autunno del 1609 e il marzo 1610: i bozzetti chiaroscurali a inchiostro e acquerello con cui Galileo infranse il dogma aristotelico dei cieli incorruttibili.",
+      content: `SCHEDA CRITICA DELL'OPERA:
+Titolo: Disegni e Studi Chiaroscurali della Luna (Fogli preparatori per il Sidereus Nuncius)
+Autore: Galileo Galilei (Pisa 1564 – Arcetri 1642)
+Datazione: Novembre – Dicembre 1609 (pubblicati a Venezia nel marzo 1610)
+Tecnica e Supporto: Inchiostro bruno e acquerello bistro a pennello su carta vergata (cinque fogli di 20 × 28 cm)
+Collocazione Attuale: Biblioteca Nazionale Centrale di Firenze (Manoscritto Gal. 48, fogli 28r-28v)
+
+1. LA NOTTE CHE CAMBIÒ LA STORIA DELL'ASTRONOMIA (30 NOVEMBRE 1609):
+Nella notte del 30 novembre 1609, dalla terrazza della sua casa di Padova, Galileo Galilei puntò verso la Luna un tubo ottico di sua invenzione capace di ingrandire gli oggetti di venti volte. Per millenni, secondo la cosmologia aristotelica e tolemaica adottata dalla teologia cristiana, i corpi celesti erano stati ritenuti sfere perfette, lisce e incorruttibili, costituite di una quintessenza eterea priva di qualsiasi asperità terrena.
+Quello che Galileo vide al telescopio smentì all'istante due millenni di dogmi filosofici: la Luna non era liscia, ma tormentata da immense valli, catene montuose maestose, cavità circolari e creste dirupate.
+
+2. IL CHIAROSCURO E LA FORMAZIONE ARTISTICA FIORENTINA:
+Molti contemporanei guardarono attraverso i primi telescopi ma non seppero interpretare le macchie luminose visibili sul disco lunare, scambiandole per vapori o difetti delle lenti. Galileo, invece, comprese immediatamente la natura orografica del suolo lunare grazie alla sua solida formazione artistica giovanile: a Firenze era stato allievo e amico intimo del pittore Ludovico Cardi detto il Cigoli e maestro di prospettiva e disegno all'Accademia delle Arti del Disegno.
+Padroneggiando la tecnica del chiaroscuro rinascimentale, Galileo notò che:
+- Le macchie scure presentavano bordi illuminati dal lato opposto alla provenienza dei raggi solari;
+- Punti luminosi isolati brillavano nella porzione oscura oltre la linea del terminatore (il confine tra giorno e notte lunare), esattamente come le vette delle montagne terrestri si accendono all'alba prima che la valle sottostante sia raggiunta dalla luce;
+- Utilizzando il calcolo trigonometrico sull'ombra proiettata dai rilievi, Galileo fu in grado di stimare con sbalorditiva precisione l'altitudine delle montagne lunari (circa quattromila metri).
+
+3. LA PUBBLICAZIONE DEL SIDEREUS NUNCIUS (VENEZIA, MARZO 1610):
+I bozzetti ad acquerello, eseguiti con campiture liquide sfumate e un tocco rapido di impressionante modernità, furono tradotti in incisioni xilografiche su rame e stampati nelle 550 copie della prima edizione del trattato 'Sidereus Nuncius' (L'Annuncio degli Astri), pubblicato a Venezia il 13 marzo 1610. Il volumetto andò esaurito in una settimana, provocando un terremoto culturale senza precedenti in tutta Europa: la Terra perdeva il suo ruolo di centro immobile e corrotto dell'universo, e i pianeti si rivelavano mondi fisici reali soggetti alle medesime leggi della materia.
+
+4. DALL'OCCHIALE DI GALILEO AL TELESCOPIO SPAZIALE JAMES WEBB:
+C'è un filo rosso diretto che collega i fogli d'acquerello di Galileo alle immagini a infrarossi del James Webb Space Telescope: la consapevolezza che guardare più lontano nello spazio significa penetrare la struttura della realtà attraverso la mediazione dello strumento scientifico e la sensibilità visiva dell'uomo.
+
+5. UN MONUMENTO DELLA CULTURA UMANA:
+Custoditi a Firenze, i disegni lunari di Galileo testimoniano il momento supremo in cui arte figurativa e metodo scientifico sperimentale si fusero, inaugurando l'età della modernità e aprendo all'umanità la contemplazione dell'infinito.`,
+      readingTime: "7 min",
+      author: "Redazione Astronomia & Storia della Scienza",
+      date: "Agosto 2026",
+      highlightQuote: "Con pennello e inchiostro bruno Galileo dipinse i crateri lunari: l'arte del chiaroscuro rinascimentale svelò all'umanità la vera forma dell'universo.",
+      originalLanguage: "Italiano",
+      sources: [
+        {
+          title: "Museo Galileo di Firenze - Il Sidereus Nuncius e i disegni della Luna",
+          url: "https://www.museogalileo.it/",
+          publisher: "Istituto e Museo di Storia della Scienza",
+          originalLanguage: "Italiano"
+        },
+        {
+          title: "Biblioteca Nazionale Centrale di Firenze - Manoscritto Gal. 48",
+          url: "https://www.bncf.firenze.sbn.it/",
+          publisher: "BNCF",
           originalLanguage: "Italiano"
         }
       ]
@@ -1126,23 +1362,53 @@ Oggi l'opera continua ad attirare visitatori da tutto il mondo a ${item.city}, c
     return pool[Math.abs(daySeed + 7) % pool.length];
   }
 
-  // Cerca un capolavoro che corrisponda ai keyword dell'interesse attivo
+  // Cerca un capolavoro che corrisponda al meglio all'argomento dell'interesse attivo
   const sortedInterests = [...interests].sort((a, b) => (b.priority || 3) - (a.priority || 3));
   const selectedInterest = sortedInterests[Math.abs(daySeed) % sortedInterests.length] || sortedInterests[0];
-  const searchTerms = [
-    (selectedInterest.category || "").toLowerCase(),
-    (selectedInterest.topic || "").toLowerCase()
-  ].filter(Boolean);
 
-  const matched = pool.find((art) => {
-    const artText = `${art.artworkTitle} ${art.artist} ${art.matchingCategory || ''} ${art.matchingTopic || ''}`.toLowerCase();
-    return searchTerms.some((term) => term.length > 3 && artText.includes(term));
-  });
+  // Estrai tutti i token significativi (min 3 lettere) dal topic e dalla categoria dell'interesse
+  const rawInterestText = `${selectedInterest.category || ""} ${selectedInterest.topic || ""}`.toLowerCase();
+  const interestTokens = rawInterestText
+    .replace(/[^a-z0-9àèéìòù]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 3 && !["delle", "della", "dello", "degli", "negli", "nella", "nello", "sono", "come", "cosa", "dopo", "prima", "dove", "tutto", "tutti"].includes(t));
 
-  if (matched) {
-    return matched;
+  // Calcola il punteggio di affinità tematica per ciascun capolavoro del pool
+  let bestArt: ArtMasterpiece | null = null;
+  let highestScore = 0;
+
+  for (const art of pool) {
+    const artText = `${art.artworkTitle} ${art.artist} ${art.matchingCategory || ''} ${art.matchingTopic || ''} ${art.whyConnected || ''}`.toLowerCase();
+    let score = 0;
+
+    for (const token of interestTokens) {
+      if (artText.includes(token)) {
+        score += 3;
+        if ((art.matchingTopic || '').toLowerCase().includes(token)) score += 6;
+        if ((art.artworkTitle || '').toLowerCase().includes(token)) score += 6;
+      }
+    }
+
+    if (score > highestScore) {
+      highestScore = score;
+      bestArt = art;
+    }
   }
 
-  return pool[Math.abs(daySeed * 17 + 3) % pool.length];
+  const chosenArt = (highestScore >= 3 && bestArt) ? bestArt : pool[Math.abs(daySeed * 17 + 3) % pool.length];
+
+  // Armonizza l'articolo con l'argomento dell'interesse selezionato
+  if (selectedInterest && selectedInterest.topic) {
+    return {
+      ...chosenArt,
+      matchingCategory: selectedInterest.category || chosenArt.matchingCategory,
+      matchingTopic: selectedInterest.topic || chosenArt.matchingTopic,
+      whyConnected: (chosenArt.whyConnected || "").includes(selectedInterest.topic)
+        ? chosenArt.whyConnected
+        : `Selezionato in perfetta armonia con "${selectedInterest.topic}": ${chosenArt.whyConnected || "un'opera scelta per la sua straordinaria risonanza estetica e concettuale."}`
+    };
+  }
+
+  return chosenArt;
 }
 

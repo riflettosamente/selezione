@@ -460,16 +460,16 @@ export function generateCustomInterestArticle(
       `Alle Radici di ${cleanTopic}: Cosa Rivelano i Più Recenti Studi Culturali`,
       `Il Valore di ${cleanTopic} nella Società Contemporanea: Riflessioni e Prospettive`
     ];
-    title = titlePatterns[(daySeed + index) % titlePatterns.length];
-    shortTitle = `${cleanTopic}: I segreti della ricerca`;
-    excerpt = `Un'analisi approfondita e documentata sul tema "${cleanTopic}", elaborata sulla base dei più recenti studi ed evidenze di settore.`;
-    content = `### L'Inquadramento Storico e Scientifico\n\nL'indagine sul tema **${cleanTopic}** si inserisce all'interno di un dibattito di straordinario interesse scientifico e culturale. La consultazione dei documenti e delle fonti accreditate (*${sourcesText}*) permette di ricostruire un quadro chiaro e documentato.\n\n### I Risultati Principali della Ricerca\n\nLe evidenze più recenti mettono in luce tre fattori fondamentali:\n1. **L'Origine del Fenomeno:** Lo sviluppo storico e concettuale di ${cleanTopic} affonda le sue radici in studi rigorosi.\n2. **Il Riscontro Empirico:** I dati raccolti confermano la centralità di questo argomento per la comprensione delle dinamiche contemporanee.\n3. **Le Prospettive Future:** Le nuove tecnologie analitiche consentono di approfondire aspetti finora inesplorati.\n\n> «Ogni approfondimento su ${cleanTopic} arricchisce la nostra visione d'insieme con nuove e stimolanti prospettive.» — *Redazione ${cat}*\n\n### Considerazioni Conclusive\n\nQuesta trattazione curata per **Selezione** offre al lettore gli strumenti critici essenziali per orientarsi con consapevolezza nel panorama di ${cleanTopic}.`;
+    title = `${cleanTopic}: Nuove Indagini e Prospettive di Ricerca`;
+    shortTitle = cleanTopic.length > 28 ? cleanTopic.slice(0, 26) + "..." : cleanTopic;
+    excerpt = item.description || `Un'analisi documentata sulle recenti evidenze e riflessioni relative a "${cleanTopic}".`;
+    content = `### Le Frontiere della Ricerca su ${cleanTopic}\n\nL'approfondimento sul tema **${cleanTopic}** mette in luce una serie di sviluppi significativi nel panorama contemporaneo. Attraverso il confronto tra fonti specializzate e dati empirici, emergono aspetti fondamentali che arricchiscono la nostra comprensione del tema.\n\n### Analisi e Riscontri Documentati\n\nGli studiosi e gli esperti del settore evidenziano come la questione non possa essere ridotta a formule semplicistiche. L'incrocio tra testimonianze d'archivio, rilievi sperimentali e dibattito critico offre chiavi di lettura inedite per interpretare l'impatto di questo ambito sulla cultura odierna.\n\n> «Comprendere la complessità di ${cleanTopic} significa acquisire strumenti essenziali per interpretare le trasformazioni del nostro tempo.» — *Redazione ${cat}*\n\n### Spunti di Riflessione\n\nIl percorso di analisi conferma l'importanza di un approccio rigoroso e interdisciplinare, capace di valorizzare il rigore documentale accanto alla chiarezza espositiva.`;
   }
 
   const sourcesList = sourcesText.split(",").map((s) => ({
-    title: `Documentazione e Archivio: ${s.trim()}`,
-    url: "https://www.google.com/search?q=" + encodeURIComponent(s.trim() + " " + rawTopic),
-    publisher: s.trim(),
+    title: `Rassegna Documentaria: ${s.trim()}`,
+    url: "https://www.treccani.it",
+    publisher: s.trim() || "Istituto Treccani",
     originalLanguage: "Italiano"
   }));
 
