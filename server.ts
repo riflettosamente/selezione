@@ -1782,41 +1782,63 @@ REGOLE ESSENZIALI:
 
 // Mappa verificata di capolavori con URL Wikimedia Commons garantiti e ad alta risoluzione
 const VERIFIED_MASTERPIECE_MAP: Record<string, string> = {
-  "baia": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
-  "portus julius": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
-  "riace": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Bronzi_di_riace%2C_V_secolo_ac._01.jpg/1280px-Bronzi_di_riace%2C_V_secolo_ac._01.jpg",
-  "alessandro": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Alexander_the_Great_mosaic.jpg/1280px-Alexander_the_Great_mosaic.jpg",
-  "festo": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Phaistos_disc_side_A_color.jpg/1200px-Phaistos_disc_side_A_color.jpg",
-  "cajal": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Cajal_cortex_drawings.png",
-  "neuroni": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Cajal_cortex_drawings.png",
-  "vitruviano": "https://upload.wikimedia.org/wikipedia/commons/2/22/Da_Vinci_Vitruve_Luc_Viatour.jpg",
-  "sidereus": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
-  "galileo": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
-  "actiniae": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Haeckel_Actiniae.jpg/1280px-Haeckel_Actiniae.jpg",
-  "haeckel": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Haeckel_Actiniae.jpg/1280px-Haeckel_Actiniae.jpg",
+  "mosaico ninfeo baia": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
+  "mosaici baia": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
+  "mosaico sommerso baia": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
+  "portus julius mosaico": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg/1280px-Parco_archeologico_di_Baia_-_portus_Julius_-_mosaico.jpg",
+  "ulisse ninfeo baia": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Ninfeo_di_punta_epitaffio%2C_statua_di_ulisse%2C_inv._147040%2C_01.jpg/1280px-Ninfeo_di_punta_epitaffio%2C_statua_di_ulisse%2C_inv._147040%2C_01.jpg",
+  "ulisse punta epitaffio": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Ninfeo_di_punta_epitaffio%2C_statua_di_ulisse%2C_inv._147040%2C_01.jpg/1280px-Ninfeo_di_punta_epitaffio%2C_statua_di_ulisse%2C_inv._147040%2C_01.jpg",
+  "turner baia": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Joseph_Mallord_William_Turner_-_The_Bay_of_Baiae%2C_with_Apollo_and_the_Sibyl_-_Google_Art_Project.jpg/1280px-Joseph_Mallord_William_Turner_-_The_Bay_of_Baiae%2C_with_Apollo_and_the_Sibyl_-_Google_Art_Project.jpg",
+  "bay of baiae": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Joseph_Mallord_William_Turner_-_The_Bay_of_Baiae%2C_with_Apollo_and_the_Sibyl_-_Google_Art_Project.jpg/1280px-Joseph_Mallord_William_Turner_-_The_Bay_of_Baiae%2C_with_Apollo_and_the_Sibyl_-_Google_Art_Project.jpg",
+  "bronzi riace": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Bronzi_di_riace%2C_V_secolo_ac._01.jpg/1280px-Bronzi_di_riace%2C_V_secolo_ac._01.jpg",
+  "mosaico alessandro": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Alexander_the_Great_mosaic.jpg/1280px-Alexander_the_Great_mosaic.jpg",
+  "battaglia isso": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Alexander_the_Great_mosaic.jpg/1280px-Alexander_the_Great_mosaic.jpg",
+  "disco festo": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Phaistos_disc_side_A_color.jpg/1200px-Phaistos_disc_side_A_color.jpg",
+  "phaistos disc": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Phaistos_disc_side_A_color.jpg/1200px-Phaistos_disc_side_A_color.jpg",
+  "cajal neuroni": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Cajal_cortex_drawings.png",
+  "cajal corteccia": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Cajal_cortex_drawings.png",
+  "uomo vitruviano": "https://upload.wikimedia.org/wikipedia/commons/2/22/Da_Vinci_Vitruve_Luc_Viatour.jpg",
+  "galileo luna": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
+  "sidereus nuncius": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
+  "crateri lunari galileo": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Galileo%27s_sketches_of_the_moon.png",
+  "haeckel actiniae": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Haeckel_Actiniae.jpg/1280px-Haeckel_Actiniae.jpg",
   "scuola di atene": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/%22The_School_of_Athens%22_by_Raffaello_Sanzio_da_Urbino.jpg/1280px-%22The_School_of_Athens%22_by_Raffaello_Sanzio_da_Urbino.jpg",
   "creazione di adamo": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
   "notte stellata": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
-  "grande onda": "https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg",
-  "hokusai": "https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg",
-  "viandante": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg/1280px-Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
+  "grande onda hokusai": "https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg",
+  "viandante mare nebbia": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg/1280px-Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg",
   "nascita di venere": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg/1280px-Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg",
-  "primavera": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Botticelli-primavera.jpg",
+  "primavera botticelli": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Botticelli-primavera.jpg",
   "adorazione dei magi": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Sandro_Botticelli_-_Adorazione_dei_Magi_-_Google_Art_Project.jpg/1280px-Sandro_Botticelli_-_Adorazione_dei_Magi_-_Google_Art_Project.jpg",
-  "gioconda": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/1200px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
-  "cenacolo": "https://upload.wikimedia.org/wikipedia/commons/4/48/The_Last_Supper_-_Leonardo_Da_Vinci_-_High_Resolution_32x16.jpg",
-  "bacio": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg/1200px-The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg",
-  "ragazza con l'orecchino di perla": "https://upload.wikimedia.org/wikipedia/commons/0/0f/1665_Girl_with_a_Pearl_Earring.jpg",
-  "orecchino di perla": "https://upload.wikimedia.org/wikipedia/commons/0/0f/1665_Girl_with_a_Pearl_Earring.jpg"
+  "gioconda leonardo": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/1200px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
+  "mona lisa": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/1200px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
+  "cenacolo leonardo": "https://upload.wikimedia.org/wikipedia/commons/4/48/The_Last_Supper_-_Leonardo_Da_Vinci_-_High_Resolution_32x16.jpg",
+  "ultima cena": "https://upload.wikimedia.org/wikipedia/commons/4/48/The_Last_Supper_-_Leonardo_Da_Vinci_-_High_Resolution_32x16.jpg",
+  "klimt bacio": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg/1200px-The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg",
+  "il bacio klimt": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg/1200px-The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg",
+  "hayez bacio": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/El_Beso_%28pinacoteca_de_Brera%2C_Mil%C3%A1n%2C_1859%29.jpg/1280px-El_Beso_%28pinacoteca_de_Brera%2C_Mil%C3%A1n%2C_1859%29.jpg",
+  "ragazza con orecchino perla": "https://upload.wikimedia.org/wikipedia/commons/0/0f/1665_Girl_with_a_Pearl_Earring.jpg"
 };
 
 // Helper per la risoluzione e ricerca dinamica di immagini ad alta definizione sul Web e Wikimedia Commons
 async function searchWikimediaImage(artist: string, title: string, hintUrl?: string): Promise<string | null> {
   try {
-    // 0a. Controllo immediato nel catalogo verificato
-    const comboKey = `${title} ${artist}`.toLowerCase();
+    // 0. Se hintUrl è già un'immagine diretta valida di Wikimedia Commons o affine, verificala e mantienila!
+    if (hintUrl && typeof hintUrl === "string" && hintUrl.startsWith("http") && !hintUrl.includes("placeholder")) {
+      const cleanHint = hintUrl.split("?")[0];
+      if (cleanHint.includes("upload.wikimedia.org") || cleanHint.includes("thumb.wikimedia.org")) {
+        const verified = await verifyDirectImageUrl(cleanHint);
+        if (verified) {
+          return cleanHint;
+        }
+      }
+    }
+
+    // 0a. Controllo mirato nel catalogo verificato (richiede corrispondenza di tutte le parole chiave della chiave)
+    const comboKey = `${title} ${artist}`.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
     for (const [k, url] of Object.entries(VERIFIED_MASTERPIECE_MAP)) {
-      if (comboKey.includes(k)) {
+      const keyWords = k.split(" ").filter((w) => w.length > 2);
+      if (keyWords.length > 0 && keyWords.every((w) => comboKey.includes(w))) {
         return url;
       }
     }

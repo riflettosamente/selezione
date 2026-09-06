@@ -810,12 +810,31 @@ export default function App() {
       const saved = localStorage.getItem(todayArtKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.artworkTitle && parsed.article) {
+        if (parsed && parsed.artworkTitle && parsed.article && parsed.imageUrl) {
           setLiveMasterpiece(parsed);
           return;
         }
       }
     } catch {}
+
+    // Inizializza con il capolavoro curato corrispondente agli interessi attivi dell'utente
+    const initialCurated = getMasterpieceForDayAndInterests(daySeed, userInterests);
+    if (initialCurated && initialCurated.imageUrl && initialCurated.article) {
+      const meta = getArtworkMetadataForArticle(initialCurated.article, initialCurated);
+      const verifiedInitial = {
+        ...initialCurated,
+        imageUrl: initialCurated.imageUrl || meta.imageUrl,
+        article: {
+          ...initialCurated.article,
+          imageUrl: initialCurated.imageUrl || meta.imageUrl
+        }
+      };
+      setLiveMasterpiece(verifiedInitial);
+      try {
+        localStorage.setItem(todayArtKey, JSON.stringify(verifiedInitial));
+      } catch {}
+      return;
+    }
 
     const fetchLiveMasterpiece = async () => {
       try {
@@ -835,12 +854,13 @@ export default function App() {
           const data = await res.json();
           if (data && data.masterpiece && isMounted) {
             const meta = getArtworkMetadataForArticle(data.masterpiece.article, data.masterpiece);
+            const verifiedImage = data.masterpiece.imageUrl || meta.imageUrl;
             const verifiedMasterpiece = {
               ...data.masterpiece,
-              imageUrl: meta.imageUrl,
+              imageUrl: verifiedImage,
               article: {
                 ...data.masterpiece.article,
-                imageUrl: meta.imageUrl
+                imageUrl: verifiedImage
               }
             };
             setLiveMasterpiece(verifiedMasterpiece);
@@ -864,23 +884,25 @@ export default function App() {
   const activeMasterpiece = useMemo(() => {
     if (liveMasterpiece) {
       const meta = getArtworkMetadataForArticle(liveMasterpiece.article, liveMasterpiece);
+      const effectiveImg = liveMasterpiece.imageUrl || meta.imageUrl;
       return {
         ...liveMasterpiece,
-        imageUrl: meta.imageUrl,
+        imageUrl: effectiveImg,
         article: {
           ...liveMasterpiece.article,
-          imageUrl: meta.imageUrl
+          imageUrl: effectiveImg
         }
       };
     }
     const defaultMp = getMasterpieceForDayAndInterests(daySeed, userInterests);
     const meta = getArtworkMetadataForArticle(defaultMp.article, defaultMp);
+    const effectiveImg = defaultMp.imageUrl || meta.imageUrl;
     return {
       ...defaultMp,
-      imageUrl: meta.imageUrl,
+      imageUrl: effectiveImg,
       article: {
         ...defaultMp.article,
-        imageUrl: meta.imageUrl
+        imageUrl: effectiveImg
       }
     };
   }, [liveMasterpiece, daySeed, userInterests]);

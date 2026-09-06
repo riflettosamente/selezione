@@ -1125,7 +1125,8 @@ export default function FlipBook({
                       {/* Immagine Autentica dell'Opera */}
                       {(() => {
                         const coverMeta = getArtworkMetadataForArticle(currentMasterpiece.article, currentMasterpiece);
-                        const proxiedUrl = getProxiedImageUrl(coverMeta.imageUrl, coverMeta.artist, coverMeta.artworkTitle);
+                        const effectiveUrl = currentMasterpiece.imageUrl || coverMeta.imageUrl;
+                        const proxiedUrl = getProxiedImageUrl(effectiveUrl, coverMeta.artist, coverMeta.artworkTitle);
                         return (
                           <img
                             src={proxiedUrl}
@@ -1134,11 +1135,8 @@ export default function FlipBook({
                             referrerPolicy="no-referrer"
                             onError={(e) => {
                               const target = e.currentTarget as HTMLImageElement;
-                              const dynamicSearchProxy = `/api/art/image-proxy?artist=${encodeURIComponent(coverMeta.artist || "")}&title=${encodeURIComponent(coverMeta.artworkTitle || "")}`;
-                              if (target.src !== dynamicSearchProxy && !target.src.includes(encodeURIComponent(coverMeta.artist || ""))) {
-                                target.src = dynamicSearchProxy;
-                              } else if (coverMeta.fallbackImageUrl && target.src !== coverMeta.fallbackImageUrl) {
-                                target.src = getProxiedImageUrl(coverMeta.fallbackImageUrl);
+                              if (effectiveUrl && target.src !== effectiveUrl && !target.src.endsWith(effectiveUrl)) {
+                                target.src = effectiveUrl;
                               }
                             }}
                             loading="eager"
@@ -1465,21 +1463,23 @@ export default function FlipBook({
 
                           {/* Contenitore Immagine ad Alta Risoluzione */}
                           <div className="relative bg-black flex items-center justify-center min-h-[200px] max-h-[380px] overflow-hidden group">
-                            <img
-                              src={getProxiedImageUrl(artworkMeta.imageUrl, artworkMeta.artist, artworkMeta.artworkTitle)}
-                              alt={`${artworkMeta.artist} - ${artworkMeta.artworkTitle}`}
-                              className="w-full h-auto max-h-[380px] object-contain mx-auto"
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                const target = e.currentTarget as HTMLImageElement;
-                                const dynamicSearchProxy = `/api/art/image-proxy?artist=${encodeURIComponent(artworkMeta.artist || "")}&title=${encodeURIComponent(artworkMeta.artworkTitle || "")}`;
-                                if (target.src !== dynamicSearchProxy && !target.src.includes(encodeURIComponent(artworkMeta.artist || ""))) {
-                                  target.src = dynamicSearchProxy;
-                                } else if (artworkMeta.fallbackImageUrl && target.src !== artworkMeta.fallbackImageUrl) {
-                                  target.src = getProxiedImageUrl(artworkMeta.fallbackImageUrl);
-                                }
-                              }}
-                            />
+                            {(() => {
+                              const directUrl = currentMasterpiece.imageUrl || artworkMeta.imageUrl;
+                              return (
+                                <img
+                                  src={getProxiedImageUrl(directUrl, artworkMeta.artist, artworkMeta.artworkTitle)}
+                                  alt={`${artworkMeta.artist} - ${artworkMeta.artworkTitle}`}
+                                  className="w-full h-auto max-h-[380px] object-contain mx-auto"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    const target = e.currentTarget as HTMLImageElement;
+                                    if (directUrl && target.src !== directUrl && !target.src.endsWith(directUrl)) {
+                                      target.src = directUrl;
+                                    }
+                                  }}
+                                />
+                              );
+                            })()}
                           </div>
 
                           {/* Didascalia e Cartiglio Museale */}

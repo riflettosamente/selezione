@@ -1025,32 +1025,39 @@ Custoditi a Firenze, i disegni lunari di Galileo testimoniano il momento supremo
 ];
 
 // Funzione helper per trovare l'immagine e la scheda critica più adatta da catalogo o dizionario
-function findVerifiedDictionaryEntry(title: string = "", artist: string = "", text: string = "") {
-  const query = `${title} ${artist} ${text}`.toLowerCase();
-  
-  // 1. Cerca per titolo specifico dell'opera, artista o parole chiave nel dizionario ad alta risoluzione
+function findVerifiedDictionaryEntry(title: string = "", artist: string = "") {
+  const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const titleNorm = norm(title);
+  const artistNorm = norm(artist);
+  const titleLower = (title || "").toLowerCase();
+  const artistLower = (artist || "").toLowerCase();
+
+  // 1. Cerca per corrispondenza precisa del titolo dell'opera o (artista + titolo) nel dizionario ad alta risoluzione
   for (const [key, item] of Object.entries(ART_IMAGE_DICTIONARY)) {
+    const itemTitleNorm = norm(item.title);
+    const itemArtistNorm = norm(item.artist);
     const itemTitleLower = (item.title || "").toLowerCase();
     const itemArtistLower = (item.artist || "").toLowerCase();
-    
-    // Verifica se il titolo dell'opera, l'artista o una parola chiave è presente
-    const titleMatch = itemTitleLower.length > 3 && query.includes(itemTitleLower);
-    const keywordMatch = item.keywords && item.keywords.some((kw) => kw.length >= 3 && query.includes(kw.toLowerCase()));
-    const artistMatch = itemArtistLower.length > 4 && (query.includes(itemArtistLower) || (artist && artist.toLowerCase().includes(itemArtistLower)));
 
-    if (titleMatch || keywordMatch || artistMatch) {
+    // Corrispondenza stretta sul titolo dell'opera (es. "adorazione dei magi", "notte stellata", "creazione di adamo")
+    const titleMatch = itemTitleNorm.length > 5 && (titleNorm.includes(itemTitleNorm) || itemTitleNorm.includes(titleNorm));
+
+    // Corrispondenza su artista noto E almeno una parola distintiva dell'opera (lunghezza > 4)
+    const artistMatch = itemArtistNorm.length > 4 && (artistNorm.includes(itemArtistNorm) || itemArtistNorm.includes(artistNorm));
+    const titleTokenMatch = itemTitleLower
+      .split(/\s+/)
+      .filter((w) => w.length > 4)
+      .some((w) => titleLower.includes(w));
+
+    if (titleMatch || (artistMatch && titleTokenMatch)) {
       return item;
     }
   }
 
   // 2. Cerca nel catalogo dei capolavori per titolo specifico dell'opera
   const catMatch = ART_MASTERPIECES_CATALOG.find((m) => {
-    const artTitle = (m.artworkTitle || "").toLowerCase();
-    const shortTitle = (m.shortArtworkTitle || "").toLowerCase();
-    return (
-      (artTitle.length > 3 && query.includes(artTitle)) ||
-      (shortTitle.length > 3 && query.includes(shortTitle))
-    );
+    const catTitleNorm = norm(m.artworkTitle);
+    return catTitleNorm.length > 5 && (titleNorm.includes(catTitleNorm) || catTitleNorm.includes(titleNorm));
   });
 
   if (catMatch) {
@@ -1184,13 +1191,16 @@ export function getArtworkMetadataForArticle(
         defaultMasterpiece.artworkTitle?.toLowerCase().includes("adorazione") &&
         defaultMasterpiece.artist?.toLowerCase().includes("botticelli");
 
+      // Preserva sempre l'immagine originale dell'opera e del suo articolo
+      const directUrl = sanitizeArtworkImageUrl(defaultMasterpiece.imageUrl || defaultMasterpiece.article?.imageUrl || article.imageUrl);
       const dictMatch = findVerifiedDictionaryEntry(defaultMasterpiece.artworkTitle, defaultMasterpiece.artist);
-      let finalImageUrl = sanitizeArtworkImageUrl(defaultMasterpiece.imageUrl || defaultMasterpiece.article?.imageUrl || article.imageUrl);
+
+      let finalImageUrl = directUrl;
       if ((!finalImageUrl || finalImageUrl === botticelliImage || finalImageUrl.includes("botticelli")) && !isBotticelliMagi && dictMatch) {
         finalImageUrl = dictMatch.url;
       }
 
-      const effectiveUrl = finalImageUrl || dictMatch?.url || botticelliImage;
+      const effectiveUrl = finalImageUrl || defaultMasterpiece.imageUrl || dictMatch?.url || (isBotticelliMagi ? botticelliImage : safeFallback);
 
       return {
         artworkTitle: defaultMasterpiece.artworkTitle,
@@ -1204,7 +1214,7 @@ export function getArtworkMetadataForArticle(
         matchingTopic: defaultMasterpiece.matchingTopic,
         whyConnected: defaultMasterpiece.whyConnected,
         imageUrl: effectiveUrl,
-        fallbackImageUrl: dictMatch?.url || (isBotticelliMagi ? botticelliImage : safeFallback)
+        fallbackImageUrl: effectiveUrl
       };
     }
   }
@@ -1218,6 +1228,7 @@ export function getArtworkMetadataForArticle(
 
   if (catalogMatch) {
     const catalogImg = sanitizeArtworkImageUrl(catalogMatch.imageUrl || catalogMatch.article?.imageUrl || article.imageUrl);
+    const effectiveCatalogUrl = catalogImg || catalogMatch.imageUrl || safeFallback;
     return {
       artworkTitle: catalogMatch.artworkTitle,
       artist: catalogMatch.artist,
@@ -1229,13 +1240,13 @@ export function getArtworkMetadataForArticle(
       matchingCategory: catalogMatch.matchingCategory,
       matchingTopic: catalogMatch.matchingTopic,
       whyConnected: catalogMatch.whyConnected,
-      imageUrl: catalogImg || safeFallback,
-      fallbackImageUrl: catalogImg || safeFallback
+      imageUrl: effectiveCatalogUrl,
+      fallbackImageUrl: effectiveCatalogUrl
     };
   }
 
-  // Priorità 3: Corrispondenza nel dizionario verificato tramite titolo opera
-  const dictMatch = findVerifiedDictionaryEntry(article.title, article.author, combinedText);
+  // Priorità 3: Corrispondenza nel dizionario verificato ESCLUSIVAMENTE tramite titolo dell'opera e artista
+  const dictMatch = findVerifiedDictionaryEntry(article.title, article.author);
   if (dictMatch) {
     return {
       artworkTitle: dictMatch.title,
