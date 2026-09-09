@@ -132,7 +132,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     museum: "Escher in Het Paleis",
     city: "L'Aia, Paesi Bassi",
     artworkType: "Litografia / Disegno di Geometria Impossibile",
-    url: "https://upload.wikimedia.org/wikipedia/commons/6/60/Relativity_by_M._C._Escher.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/e/e7/Giovanni_Battista_Piranesi_-_Le_Carceri_d%27Invenzione_-_Second_Edition_-_1761_-_01_-_Title_Plate.jpg",
     keywords: ["escher", "relativita", "relativity", "scale impossibili", "gravita", "spazio tempo", "geometria"]
   },
   "boccioni-continuita-spazio": {
@@ -142,7 +142,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     museum: "Museo del Novecento",
     city: "Milano",
     artworkType: "Scultura Monumentale / Avanguardia Futurista",
-    url: "https://upload.wikimedia.org/wikipedia/commons/a/a4/Unique_Forms_of_Continuity_in_Space_by_Umberto_Boccioni_1913.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/f/fd/%27Unique_Forms_of_Continuity_in_Space%27%2C_1913_bronze_by_Umberto_Boccioni.jpg",
     keywords: ["boccioni", "continuita nello spazio", "futurismo", "velocita", "dinamismo", "tecnologia", "macchine"]
   },
   "blake-ancient-of-days": {
@@ -162,7 +162,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     museum: "National Gallery",
     city: "Londra",
     artworkType: "Dipinto ad Olio su Tela",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/An_Experiment_on_a_Bird_in_an_Air_Pump_by_Joseph_Wright_of_Derby%2C_1768.jpg/1280px-An_Experiment_on_a_Bird_in_an_Air_Pump_by_Joseph_Wright_of_Derby%2C_1768.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/2/22/An_Experiment_on_a_Bird_in_an_Air_Pump_by_Joseph_Wright_of_Derby%2C_1768.jpg",
     keywords: ["wright of derby", "pompa pneumatica", "scienza", "esperimento", "illuminismo", "fisica del vuoto"]
   },
   "botticelli-magi": {
@@ -207,7 +207,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1501-1504",
     museum: "Galleria dell'Accademia",
     city: "Firenze",
-    url: "https://upload.wikimedia.org/wikipedia/commons/a/a0/%27David%27_by_Michelangelo_Fir_JBU005_edit.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/c/c0/Florence_-_David_-_t%C3%AAte.jpg",
     keywords: ["david", "michelangelo", "accademia", "marmo di carrara"]
   },
   "van-gogh-notte-stellata": {
@@ -216,7 +216,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1889",
     museum: "Museum of Modern Art (MoMA)",
     city: "New York",
-    url: "https://upload.wikimedia.org/wikipedia/commons/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
     keywords: ["van gogh", "notte stellata", "starry night", "moma", "turbolenza", "vortici", "gogh", "saint-rémy"]
   },
   "van-gogh-girasoli": {
@@ -243,7 +243,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1831 circa",
     museum: "British Museum / Tokyo National Museum",
     city: "Londra / Tokyo",
-    url: "https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Tsunami_by_hokusai_19th_century.jpg/1280px-Tsunami_by_hokusai_19th_century.jpg",
     keywords: ["hokusai", "grande onda", "kanagawa", "onda", "monte fuji", "ukiyo-e", "katsushika"]
   },
   "disco-di-festo": {
@@ -252,7 +252,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1700 a.C. circa",
     museum: "Museo Archeologico di Heraklion",
     city: "Creta, Grecia",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Alexander_the_Great_mosaic.jpg/1280px-Alexander_the_Great_mosaic.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/e/e9/UCB_Phaistos_Disc.png",
     keywords: ["festo", "disco di festo", "phaistos", "minoici", "creta", "glifi", "geroglifici"]
   },
   "leonardo-monna-lisa": {
@@ -261,7 +261,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1503-1519",
     museum: "Museo del Louvre",
     city: "Parigi",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/1200px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/1280px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
     keywords: ["gioconda", "monna lisa", "mona lisa", "leonardo da vinci", "louvre"]
   },
   "leonardo-ultima-cena": {
@@ -306,7 +306,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1907-1908",
     museum: "Österreichische Galerie Belvedere",
     city: "Vienna, Austria",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg/1200px-The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg/1280px-The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg",
     keywords: ["klimt", "bacio", "kuss", "belvedere", "oro", "gustav klimt"]
   },
   "monet-impressione-sole": {
@@ -360,7 +360,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1893",
     museum: "Galleria Nazionale di Oslo",
     city: "Oslo, Norvegia",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg/1200px-Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg/1280px-Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg",
     keywords: ["urlo", "munch", "scream", "skrik", "edvard munch", "espressionismo"]
   },
   "rembrandt-ronda-notte": {
@@ -387,7 +387,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1844",
     museum: "National Gallery",
     city: "Londra",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Rain_Steam_and_Speed_the_Great_Western_Railway.jpg/1280px-Rain_Steam_and_Speed_the_Great_Western_Railway.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/9/96/Turner_-_Rain%2C_Steam_and_Speed_-_National_Gallery_file.jpg",
     keywords: ["turner", "pioggia vapore", "ferrovia", "rain steam", "william turner"]
   },
   "dali-persistenza-memoria": {
@@ -396,7 +396,7 @@ export const ART_IMAGE_DICTIONARY: Record<string, {
     year: "1931",
     museum: "Museum of Modern Art (MoMA)",
     city: "New York",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/The_Persistence_of_Memory.jpg/1200px-The_Persistence_of_Memory.jpg",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
     keywords: ["dali", "persistenza della memoria", "orologi molli", "surrealismo", "salvador dali"]
   }
 };
@@ -759,13 +759,13 @@ Oggi 'La Grande Onda di Kanagawa' è considerata una delle opere d'arte più rip
     matchingCategory: "Mistero",
     matchingTopic: "Archeologia Misteriosa e Luoghi Perduti",
     whyConnected: "Ispirato all'interesse 'Archeologia Misteriosa e Luoghi Perduti': il Disco di Festo rappresenta il più grande enigma epigrafico dell'antichità e il primo documento a caratteri mobili della storia.",
-    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Phaistos_disc_side_A_color.jpg/1200px-Phaistos_disc_side_A_color.jpg",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e9/UCB_Phaistos_Disc.png",
     coverAccentColor: "from-amber-950 via-stone-800 to-orange-950",
     article: {
       id: "capolavori-disco-di-festo-creta",
       pageNumber: 1,
       category: "Arte",
-      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Phaistos_disc_side_A_color.jpg/1200px-Phaistos_disc_side_A_color.jpg",
+      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e9/UCB_Phaistos_Disc.png",
       title: "Capolavori dell'Umanità: I Sigilli Enigmatici del Disco di Festo (1700 a.C.)",
       shortTitle: "Capolavori: Il Disco di Festo",
       excerpt: "Rinvenuto nel 1908 nel palazzo minoico di Festo: il disco d'argilla cotta con 241 glifi impressi a spirale che precede la stampa a caratteri mobili di tremila anni.",

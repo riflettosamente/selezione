@@ -129,10 +129,12 @@ async function callGroqChat(
     throw new Error("Richiesta ampia reindirizzata a Gemini per gestione ottimale del contesto");
   }
 
-  // Modelli Groq affidabili: privilegia Qwen per formattazione e velocità
+  // Modelli Groq affidabili: privilegia Llama 3.3 e Qwen per formattazione e velocità
   const requestedModel = modelName || process.env.GROQ_MODEL?.trim();
   const modelsToTry = [
     requestedModel,
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
     "qwen/qwen3.8-27b",
     "qwen/qwen3.6-27b"
   ].filter(Boolean) as string[];
@@ -146,6 +148,7 @@ async function callGroqChat(
         model,
         messages,
         temperature,
+        max_tokens: 4096,
       };
       if (jsonMode) {
         body.response_format = { type: "json_object" };
@@ -158,7 +161,7 @@ async function callGroqChat(
           "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify(body),
-      }, 9000);
+      }, 20000);
 
       if (!res.ok) {
         const errText = (res.text || res.error || "").toLowerCase();
@@ -240,12 +243,13 @@ async function callOpenRouterChat(
         model,
         messages,
         temperature,
+        max_tokens: 4096,
       };
       if (jsonMode) {
         body.response_format = { type: "json_object" };
       }
 
-      // Timeout contenuto a 5500ms per modello: se OpenRouter è in coda o lento, passa rapidamente al modello successivo o a Groq
+      // Timeout esteso a 25000ms per consentire la stesura completa di articoli approfonditi da ~900 parole
       const res = await fetchJsonWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -255,7 +259,7 @@ async function callOpenRouterChat(
           "X-Title": "Selezione Quotidiano"
         },
         body: JSON.stringify(body),
-      }, 5500);
+      }, 25000);
 
       if (!res.ok) {
         const errText = res.text || res.error || "";
@@ -667,6 +671,7 @@ const serverArticlesHistory: { id: string; title: string; normalizedTitle: strin
 const serverMasterpiecesHistory: { artworkTitle: string; artist: string; normalizedArtwork: string; timestamp: number }[] = [];
 const serverBooksHistory: { title: string; author: string; normalizedTitle: string; timestamp: number }[] = [];
 const serverWordsHistory: { word: string; normalizedWord: string; timestamp: number }[] = [];
+const serverQuotesHistory: { quote: string; author: string; anecdoteTitle: string; normalizedTitle: string; timestamp: number }[] = [];
 
 function normalizeServerText(text: string): string {
   if (!text) return "";
@@ -746,6 +751,23 @@ function registerWordInServerHistory(word: string) {
   }
 }
 
+function registerQuoteInServerHistory(quote: string, author: string = "", anecdoteTitle: string = "") {
+  if (!quote && !anecdoteTitle) return;
+  const norm = normalizeServerText(anecdoteTitle || quote);
+  if (!serverQuotesHistory.some(h => h.normalizedTitle === norm)) {
+    serverQuotesHistory.push({
+      quote,
+      author,
+      anecdoteTitle,
+      normalizedTitle: norm,
+      timestamp: Date.now()
+    });
+  }
+  if (serverQuotesHistory.length > MAX_SERVER_HISTORY) {
+    serverQuotesHistory.splice(0, serverQuotesHistory.length - MAX_SERVER_HISTORY);
+  }
+}
+
 // Helper to shuffle an array deterministically using a seed
 function serverSeededShuffle<T>(array: T[], seed: number): T[] {
   const arr = [...array];
@@ -786,9 +808,9 @@ REGOLE CRITICHE:
    - id: stringa identificativa univoca
    - category: una tra "Attualità", "Scienza", "Mistero", "Cultura", "Salute", "Storia", "Cinema", "Folclore"
    - title: Titolo giornalistico accattivante e veritiero
-   - excerpt: Breve estratto di 2-3 righe (circa 30-40 parole)
-   - content: 6-8 paragrafi narrativi ampi, dettagliati e coinvolgenti (almeno 600-800 parole totali), suddivisi con 2-3 sottotitoli di sezione (es. '### Titolo Sezione') per un'esperienza di lettura ricca ed esaustiva da vera rivista d'autore
-   - readingTime: es. "6 min"
+   - excerpt: Breve estratto di 2-4 righe (circa 35-50 parole)
+   - content: Saggio narrativo approfondito, dettagliato e coinvolgente di circa 900 parole (850-950 parole), suddiviso con 4-6 sottotitoli di sezione (es. '### Titolo Sezione') per un'esperienza di lettura ricca ed esaustiva da vera rivista d'autore
+   - readingTime: es. "8 min"
    - author: Nome del giornalista o divulgatore
    - date: Data formattata (es. "22 Agosto 2026")
    - highlightQuote: Citazione o fatto chiave significativo
@@ -1185,13 +1207,18 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
         }
         standardInterests = standardInterests.slice(0, 10);
 
-        // Generazione in batch concorrenti per garantire:
-        // 1. Rispetto scrupoloso dei token di output (senza troncamento del JSON)
-        // 2. Articoli autentici, ricchi e specifici per ciascun argomento dell'utente
-        // 3. Fallback trasparente e resiliente senza mai generare template fittizi
-        const batch1 = standardInterests.slice(0, 5);
-        const batch2 = standardInterests.slice(5, 10);
-        const batchCondensed = [condensedInterest];
+        // Generazione in piccoli lotti di 2 articoli ciascuno:
+        // Con articoli lunghi circa 900 parole ciascuno (~1.300 token), lotti di 2 articoli
+        // generano circa 2.600 token di output, rimanendo perfettamente sotto il tetto di 4.096 token
+        // di Groq e OpenRouter, prevenendo troncamenti e garantendo articoli completi e ricchi.
+        const BATCH_SIZE = 2;
+        const topicBatches: Array<{ topics: any[]; isCondensed: boolean }> = [];
+        for (let i = 0; i < standardInterests.length; i += BATCH_SIZE) {
+          topicBatches.push({ topics: standardInterests.slice(i, i + BATCH_SIZE), isCondensed: false });
+        }
+        if (condensedInterest) {
+          topicBatches.push({ topics: [condensedInterest], isCondensed: true });
+        }
 
         const buildBatchPrompt = (batchTopics: any[], isCondensed: boolean) => {
           const formatted = batchTopics.map((item: any, idx: number) => {
@@ -1215,6 +1242,10 @@ REGOLA FONDAMENTALE DI AUTENTICITÀ (DIVIETO DI ARTICOLI O FORMULE GENERICHE):
 4. Per OGNI articolo fornisci da 2 a 3 FONTI WEB REALI ED ESISTENTI (titolo del paper o articolo, URL reale dell'ente/rivista come Nature, Science, NASA, Parco Archeologico, UNESCO, Treccani, Le Scienze, e nome editore). MAI link finti tipo google.com/search?q=...
 ${excludeDirective}
 
+LUNGHEZZA E STRUTTURA EDITORIALE (OBIETTIVO 900 PAROLE):
+- Ogni articolo standard NON deve essere un riassunto sbrigativo o sintetico. Deve essere un saggio giornalistico ricco, denso ed esaustivo di circa 900 parole (850-950 parole), diviso in 4-6 sezioni narrative con sottotitoli markdown '### Titolo Sezione', ricco di spiegazioni approfondite, aneddoti, dati, citazioni e prospettive.
+- Se si tratta del libro condensato (isCondensedBook: true), deve essere un'opera monografica di 1100-1300 parole divisa in capitoli ben articolati.
+
 FORMATO JSON:
 Rispondi ESCLUSIVAMENTE con un JSON strutturato con la proprietà "articles":
 {
@@ -1225,9 +1256,9 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato con la proprietà "articles":
       "topicRef": "Titolo del tema assegnato",
       "title": "Titolo giornalistico accattivante, colto e specifico",
       "shortTitle": "Titolo sintetico (3-6 parole)",
-      "excerpt": "Sintesi narrativa accattivante di 2-3 righe (30-45 parole)",
-      "content": "Testo approfondito diviso con sottotitoli markdown (### Titolo). ${isCondensed ? 'Scrivi un saggio ampio di 800-1100 parole diviso in capitoli capitolo per capitolo.' : 'Scrivi un testo ricco e stimolante di 450-650 parole suddiviso in 2-3 sezioni con sottotitoli.'}",
-      "readingTime": "${isCondensed ? '9 min' : '5 min'}",
+      "excerpt": "Sintesi narrativa accattivante di 3-4 righe (40-60 parole)",
+      "content": "Testo approfondito diviso con sottotitoli markdown (### Titolo Sezione). ${isCondensed ? "Scrivi un saggio monografico ampio di 1100-1300 parole diviso in capitoli." : "Scrivi un saggio approfondito, dettagliato e appassionante di circa 900 parole (850-950 parole), articolato in 4-6 sezioni narrative con sottotitoli markdown (### Titolo Sezione), ricco di aneddoti, spiegazioni dettagliate, evidenze storiche o scientifiche, citazioni dirette e contestualizzazione culturale da vera rivista d'autore."}",
+      "readingTime": "${isCondensed ? '11 min' : '8 min'}",
       "author": "Nome e qualifica del divulgatore/giornalista",
       "date": "${dateFormatted || "Oggi"}",
       "highlightQuote": "Citazione significativa o riflessione cardine",
@@ -1249,7 +1280,7 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato con la proprietà "articles":
           const userPrompt = `Scrivi gli articoli per i seguenti temi:
 ${formatted}
 
-Assicurati che ciascun articolo sia un'indagine approfondita, concreta e specifica con fonti reali.`;
+Assicurati che ciascun articolo sia un saggio esaustivo di circa 900 parole con 4-6 sezioni e fonti reali.`;
 
           return { systemPrompt, userPrompt };
         };
@@ -1285,11 +1316,13 @@ Assicurati che ciascun articolo sia un'indagine approfondita, concreta e specifi
           return { articles: raw, webLinks, webSearchQueries };
         };
 
-        const batchResults = await Promise.allSettled([
-          runBatch(batch1, false),
-          runBatch(batch2, false),
-          runBatch(batchCondensed, true)
-        ]);
+        // Esegui i batch con concorrenza controllata (2 alla volta) per evitare rate limit su Groq / OpenRouter
+        const batchResults: any[] = [];
+        for (let i = 0; i < topicBatches.length; i += 2) {
+          const chunk = topicBatches.slice(i, i + 2);
+          const chunkRes = await Promise.allSettled(chunk.map(b => runBatch(b.topics, b.isCondensed)));
+          batchResults.push(...chunkRes);
+        }
 
         let rawArticles: any[] = [];
         let allWebLinks: any[] = [];
@@ -2074,6 +2107,236 @@ Rispondi con un JSON valido con questo schema:
     return res.json({
       success: true,
       word: fallbackWord,
+      sourceSheet: "Interessi Personali (Predefiniti)",
+    });
+  }
+});
+
+// In-memory cache for daily quote & anecdote
+const dailyQuoteCache: Map<string, { quote: any; timestamp: number }> = new Map();
+
+const CURATED_DAILY_QUOTES = [
+  {
+    quote: "«La cultura non è possedere un magazzino ben fornito di notizie, ma è la capacità che la nostra mente ha di comprendere la vita, il posto che vi teniamo, i nostri rapporti con gli altri uomini.»",
+    author: "Antonio Gramsci",
+    source: "Lettere e Scritti Giovanili",
+    anecdoteTitle: "La genesi del 'Reader's Digest' e la rivoluzione del formato tascabile",
+    anecdote: "Nel novembre del 1918, durante l'offensiva della Mosa-Argonne nella prima guerra mondiale, un giovane sergente dell'esercito americano di nome DeWitt Wallace fu gravemente ferito da schegge di shrapnel. Durante i lunghi mesi di degenza e convalescenza nell'ospedale militare di Besançon in Francia, Wallace trascorreva le sue giornate leggendo decine di riviste, quotidiani e saggi illustrati. Resosi conto di quanto tempo richiedesse reperire informazioni rilevanti sepolte in articoli prolissi, iniziò a ritagliare e condensare i passaggi chiave su piccoli cartoncini tascabili, annotando per ciascuno l'essenza narrativa e documentale.\n\nRientrato a New York nel 1921 insieme alla moglie e co-fondatrice Lila Bell Acheson, Wallace tentò invano di proporre il progetto di un periodico di 'letture selezionate e condensate' ai grandi editori di Manhattan, venendo respinto con scetticismo. Senza perdersi d'animo, la coppia affittò una stanza nel seminterrato di una taverna clandestina (speakeasy) a Greenwich Village e, con una modesta macchina da scrivere e un capitale iniziale di poche centinaia di dollari raccolti tramite lettere di sottoscrizione postale, pubblicò nel febbraio 1922 il primo numero del 'Reader's Digest'.\n\nLa rivista — stampata nel caratteristico formato compatto tascabile, privo di pubblicità e impreziosito da sommari cromatici ed eleganti massime morali — divenne in pochi decenni un fenomeno editoriale planetario senza precedenti, tradotta in oltre venticinque lingue e letta da più di settanta milioni di lettori in ogni continente, dimostrando il valore universale della sintesi culturale e della divulgazione accessibile.",
+    category: "Cultura",
+    matchingTopic: "Storia dell'editoria e divulgazione"
+  },
+  {
+    quote: "«Considerate la vostra semenza: fatti non foste a viver come bruti, ma per seguir virtute e canoscenza.»",
+    author: "Dante Alighieri",
+    source: "Divina Commedia, Inferno XXVI (Il Canto di Ulisse)",
+    anecdoteTitle: "La scoperta fortuita della penicillina e la nascita degli antibiotici",
+    anecdote: "Nel settembre del 1928, il medico e microbiologo scozzese Alexander Fleming fece ritorno nel suo laboratorio al St. Mary's Hospital di Londra dopo una vacanza estiva trascorsa con la famiglia nelle campagne del Suffolk. Prima di partire, Fleming aveva inoculato diverse piastre di Petri con colonie del batterio Staphylococcus aureus, lasciandole disposte su un banco da lavoro vicino a una finestra rimasta socchiusa.\n\nNell'esaminare le colture prima di procedere al lavaggio dei vetrini con disinfettante, lo scienziato notò un dettaglio insolito che avrebbe cambiato il destino della medicina: in una delle piastre, una muffa aerea contaminante di colore verde-azzurrognolo (in seguito identificata come Penicillium notatum) aveva iniziato a proliferare. Intorno al fungo, le colonie batteriche che prima prosperavano apparivano completamente dissolte e trasparenti, come distrutte da una sostanza letale secreta dal microrganismo.\n\nInvece di gettare la piastra contaminata come un banale errore di laboratorio, Fleming isolò il fungo e battezzò il suo principio attivo 'penicillina'. Negli anni Quaranta, grazie agli ulteriori studi di Howard Florey ed Ernst Chain a Oxford, la penicillina fu purificata e prodotta su scala industriale, salvando milioni di vite umane durante e dopo la seconda guerra mondiale e aprendo ufficialmente l'era della terapia antibiotica moderna.",
+    category: "Scienza",
+    matchingTopic: "Storia della medicina e microbiologia"
+  },
+  {
+    quote: "«Imparare senza pensare è fatica perduta; pensare senza imparare è pericoloso.»",
+    author: "Confucio",
+    source: "Dialoghi (Lunyu, Libro II)",
+    anecdoteTitle: "Le leggendarie 'Pack Horse Librarians' dei monti Appalachi",
+    anecdote: "Nel 1935, durante gli anni più bui della Grande Depressione americana, il presidente Franklin D. Roosevelt e la First Lady Eleanor istituirono all'interno della Works Progress Administration un programma pionieristico e audace: il 'Pack Horse Library Project'. Nelle remote e isolate valli delle montagne del Kentucky orientale, dove l'analfabetismo superava il 30% e non esistevano strade carrabili, decine di coraggiose donne bibliotecarie furono assunte per recapitare libri, riviste e raccolte di racconti a cavallo e a dorso di mulo.\n\nSfidando bufere di neve invernali, torrenti in piena e sentieri rocciosi a strapiombo percorsi per oltre trenta chilometri al giorno con bisacce piene di volumi rilegati a mano con stoffe riciclate, le 'Book Ladies' raggiungevano capanne di boscaioli, villaggi minerari e minuscole scuole rurali arroccate sui monti. Se un libro era logorato o danneggiato, le bibliotecarie ritagliavano illustrazioni, ricette e articoli per assemblare nuovi quaderni di lettura illustrati.\n\nIl progetto, attivo fino al 1943, arrivò a servire oltre centomila residenti montani, creando un legame indissolubile tra comunità isolate e l'amore per la lettura e l'istruzione, e rimanendo nella storia dell'alfabetizzazione come uno dei più straordinari esempi di dedizione civile ed emancipazione culturale.",
+    category: "Storia",
+    matchingTopic: "Diffusione del sapere e solidarietà sociale"
+  },
+  {
+    quote: "«Sapere è potere. Ma sapere dove trovare la conoscenza quando serve, e avere la curiosità di collegarla, è la vera saggezza.»",
+    author: "Albert Einstein",
+    source: "Pensieri, Idee e Opinioni",
+    anecdoteTitle: "Il violino 'Lina' e le intuizioni matematiche della Relatività",
+    anecdote: "Pochi sanno che per tutta la sua vita Albert Einstein considerò la musica non un semplice passatempo ricreativo, ma una componente organica e indispensabile del suo stesso processo creativo e del suo pensiero scientifico. Iniziato allo studio del violino all'età di sei anni dalla madre Pauline Koch, Einstein si innamorò perdutamente delle partiture di Wolfgang Amadeus Mozart e delle sonate di Johann Sebastian Bach, portando sempre con sé la sua preziosa custodia contenente il violino che aveva affettuosamente ribattezzato 'Lina'.\n\nDurante gli anni cruciali di Zurigo e Berlino tra il 1905 e il 1915, quando si trovava di fronte a vicoli ciechi nei complessi calcoli tensoriali necessari per formulare la Relatività Generale, Einstein interrompeva bruscamente il lavoro alla scrivania, prendeva il violino e si ritirava in cucina o nel suo studio a improvvisare accordi per ore. Sua sorella Maja e la seconda moglie Elsa raccontavano che, spesso, nel bel mezzo di una cadenza musicale, il fisico si fermava all'improvviso, esclamando a gran voce: «Adesso ho capito!».\n\nEinstein spiegò più volte ai suoi colleghi che la struttura armonica della musica classica e la bellezza geometrica delle equazioni dell'universo scaturivano dalla medesima sorgente di armonia naturale: «Se non fossi stato un fisico, sarei probabilmente stato un musicista. Penso spesso in termini musicali, vivo i miei sogni a occhi aperti nella musica e vedo la mia vita scandita dalle leggi dell'armonia sonora».",
+    category: "Scienza",
+    matchingTopic: "Fisica teorica e armonia universale"
+  },
+  {
+    quote: "«Non c'è sollievo più grande che trovare in un libro le parole esatte per ciò che sentivamo dentro di noi, ma non sapevamo ancora nominare.»",
+    author: "Virginia Woolf",
+    source: "Saggi Letterari e Diari Intimi",
+    anecdoteTitle: "La tipografia artigianale sul tavolo della 'Hogarth Press'",
+    anecdote: "Nel marzo del 1917, desiderosi di conquistare una totale libertà espressiva lontana dai condizionamenti e dalle censure degli editori commerciali londinesi, Virginia Woolf e suo marito Leonard si recarono in una bottega di macchinari usati a Farringdon Street e acquistarono per diciannove sterline una piccola macchina tipografica manuale in ghisa e alcuni cassetti di caratteri mobili in piombo (font Caslon Old Face).\n\nMontata la pressa direttamente sul tavolo della sala da pranzo della loro residenza di Hogarth House a Richmond, la coppia imparò da autodidatta i segreti dell'arte tipografica: comporre a mano riga per riga con il compositoio di metallo, inchiostrare i rulli, stendere la carta umida e girare la leva di pressione a mano. Lavorando ogni pomeriggio tra fumi d'inchiostro e fogli stesi ad asciugare su fili di spago sopra il camino, fondarono la celebre casa editrice indipendente 'Hogarth Press'.\n\nDalla loro modesta bottega domestica uscirono non solo le prime edizioni di capolavori immortali della stessa Virginia (come 'La signora Dalloway' e 'Gita al faro'), ma anche la prima edizione in lingua inglese de 'La terra desolata' (The Waste Land) di T.S. Eliot e le prime traduzioni storiche delle opere psicoanalitiche di Sigmund Freud, dimostrando come l'artigianato editoriale indipendente possa cambiare il corso della letteratura mondiale.",
+    category: "Cultura",
+    matchingTopic: "Letteratura e indipendenza editoriale"
+  },
+  {
+    quote: "«Un giorno senza aver appreso qualcosa di nuovo, o senza aver scrutato la natura con occhi attenti, è un giorno non pienamente vissuto.»",
+    author: "Leonardo da Vinci",
+    source: "Codice Atlantico (Fogli di Botanica e Meccanica)",
+    anecdoteTitle: "I taccuini di pergamena sempre legati alla cintura",
+    anecdote: "Nel corso della sua intera esistenza, da giovane apprendista nella bottega fiorentina di Andrea del Verrocchio fino agli ultimi anni trascorsi nel castello di Clos-Lucé ad Amboise alla corte di Francesco I, Leonardo da Vinci non usciva mai di casa senza portare legato alla cintura un piccolo libretto di pergamena rigata, munito di una punta metallica d'argento e di boccette d'inchiostro protette da cuoio.\n\nOgni qualvolta camminava per i mercati o lungo gli argini dell'Arno, Leonardo si arrestava di colpo per immortalare un dettaglio: l'insolita smorfia di un viandante arrabbiato, i vortici spiraliformi creati dall'acqua attorno a un pilastro di ponte, le nervature di una foglia di quercia o il battito asimmetrico delle ali di una libellula in volo. Se il soggetto era in movimento, lo schizzava rapidamente a carboncino, aggiungendo poi ai margini le sue famose annotazioni in scrittura speculare destrorsa (da destra a sinistra).\n\nQuesti quaderni tascabili — confluiti in seguito nei celebri codici manoscritti come il Codice Atlantico, il Codice Arundel e il Codice Leicester — testimoniano che il genio universale di Leonardo non fu un dono passivo, ma il frutto di una disciplina quotidiana e maniacale dell'osservazione visiva e della sete insaziabile di comprendere i meccanismi nascosti della realtà.",
+    category: "Arte",
+    matchingTopic: "Genio rinascimentale e metodo scientifico"
+  },
+  {
+    quote: "«La curiosità è una delle forme più certe e generose del coraggio umano: chi è curioso non teme di rimettere in discussione le proprie certezze.»",
+    author: "Italo Calvino",
+    source: "Lezioni Americane: Sei proposte per il prossimo millennio",
+    anecdoteTitle: "I messaggi segreti e l'arte degli inchiostri simpatici nel Rinascimento",
+    anecdote: "Nel corso del Cinquecento e del Seicento, durante le turbolente guerre di religione e le fitte trame diplomatiche tra le corti di Venezia, Roma, Londra e Parigi, studiosi, alchimisti e ambasciatori svilupparono raffinate tecniche di steganografia per proteggere trattati scientifici e corrispondenze confidenziali dagli occhi dei censori e delle spie di corte.\n\nUno dei metodi più celebri e diffusi faceva uso degli 'inchiostri simpatici' o invisibili, formulati combinando sostanze naturali apparentemente innocue: succo di limone fresco, allume di rocca, latte di fico o soluzioni di solfato di ferro. Gli scrivani vergavano lettere commerciali di facciata in comune inchiostro nero di noce di galla e, tra le righe o sul retro della pergamena, tracciavano il vero messaggio segreto con una penna d'oca intinta nel liquido trasparente, che una volta asciutto risultava completamente invisibile a occhio nudo.\n\nIl destinatario, informato del codice tramite un canale separato, doveva semplicemente avvicinare con estrema delicatezza il foglio alla fiamma di una candela o strofinarlo con una tintura reattiva di acido tannico: per effetto del calore e dell'ossidazione termica, le parole invisibili riaffioravano miracolosamente sul supporto cartaceo con un nitido colore bruno-dorato, custodendo il segreto fino alla fine del viaggio.",
+    category: "Storia",
+    matchingTopic: "Crittografia storica e ingegno umano"
+  },
+  {
+    quote: "«Niente nella vita va temuto, dev'essere soltanto compreso. Ora è il momento di comprendere di più, affinché possiamo temere di meno.»",
+    author: "Marie Curie",
+    source: "Note autobiografiche e diari di laboratorio",
+    anecdoteTitle: "Le otto tonnellate di pechblenda nel capannone dismesso di Rue Lhomond",
+    anecdote: "Tra il 1898 e il 1902 a Parigi, Marie Skłodowska Curie e suo marito Pierre intrapresero una delle imprese scientifiche più titaniche e faticose della storia moderna. Privi di finanziamenti istituzionali e respinti dalla Sorbona per l'assegnazione di un laboratorio idoneo, i coniugi Curie ottennero il permesso di utilizzare un vecchio hangar di legno abbandonato nella facoltà di medicina in Rue Lhomond, con pavimento in asfalto sconnesso e un tetto di vetro fessurato che grondava pioggia d'inverno e accumulava calore soffocante d'estate.\n\nFacendosi recapitare dalle miniere di Joachimsthal in Boemia oltre otto tonnellate di scarti di minerale di pechblenda, Marie trascorse quattro anni a mescolare a mano, con una pesante sbarra di ferro alta quasi quanto lei, enormi calderoni ribollenti di pece e acidi corrosivi. Lavorando tra fumi tossici in una stanza priva di cappe aspiranti, purificava frazione dopo frazione attraverso estenuanti cristallizzazioni frazionate.\n\nAlla fine del 1902, da quelle tonnellate di roccia grezza, Marie riuscì a isolare appena un decimo di grammo di cloruro di radio puro. Quando la sera i due scienziati tornavano al buio nell'hangar silenzioso, guardavano estasiati le provette allineate sui tavolacci di legno grezzo che brillavano di una magica fosforescenza azzurra nell'oscurità: la testimonianza tangibile dell'energia atomica e della dedizione incrollabile alla ricerca.",
+    category: "Scienza",
+    matchingTopic: "Fisica nucleare e dedizione alla scoperta"
+  }
+];
+
+// Endpoint per la generazione via API della "Massima del Giorno" e del relativo articolo "Aneddoto del Giorno"
+app.post(["/api/quote/daily", "/api/anecdote/daily"], async (req, res) => {
+  try {
+    const {
+      interests,
+      spreadsheetId,
+      accessToken,
+      forceRefresh,
+      seed = 0,
+      excludeQuotes = [],
+      excludeAnecdotes = [],
+      dateFormatted
+    } = req.body;
+
+    const todayDateKey = new Date().toISOString().slice(0, 10);
+    const cacheKey = `daily_quote_${todayDateKey}`;
+
+    if (!forceRefresh) {
+      const cached = dailyQuoteCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24) {
+        return res.json({
+          success: true,
+          quote: cached.quote,
+          sourceSheet: "Personal Digest (Server Cache)",
+        });
+      }
+    }
+
+    let activeInterests: InterestItem[] = [];
+    if (Array.isArray(interests) && interests.length > 0) {
+      activeInterests = interests;
+    }
+
+    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+    const effectiveIndex = Math.abs(dayOfYear + (Number(seed) || 0));
+
+    // Normalizzazione ed esclusione per anti-duplicazione
+    const excludedNormItems = [
+      ...(excludeQuotes || []).map(normalizeServerText),
+      ...(excludeAnecdotes || []).map(normalizeServerText)
+    ];
+    serverQuotesHistory.forEach((h) => {
+      if (h.normalizedTitle) excludedNormItems.push(h.normalizedTitle);
+    });
+
+    const excludeDirective = excludedNormItems.length > 0
+      ? `\nREGOLE CRITICHE DI UNICITÀ (NO RIPETIZIONI):\nNon selezionare MAI massime o aneddoti già trattati o simili ai seguenti:\n- ${[...new Set(excludeAnecdotes.concat(excludeQuotes))].slice(0, 30).join(", ")}\nCrea una NUOVA Massima autentica e un NUOVO Aneddoto storico inedito e coinvolgente.`
+      : "";
+
+    if (hasAnyAiKey() && activeInterests.length > 0) {
+      try {
+        const ai = getGemini();
+        const sorted = [...activeInterests].sort((a, b) => (b.priority || 3) - (a.priority || 3));
+        const selectedInterest = sorted[effectiveIndex % sorted.length] || sorted[0];
+
+        const prompt = `Sei il curatore letterario e redattore capo della celebre rubrica di chiusura "La Massima del Giorno" e del relativo articolo saggio «Aneddoto del Giorno» per la prestigiosa rivista d'autore "Personal Digest / Selezione".
+
+L'edizione odierna approfondisce tra i suoi temi di riferimento:
+- Categoria: "${selectedInterest.category}"
+- Argomento culturale: "${selectedInterest.topic}"
+- Descrizione: "${selectedInterest.description || 'Approfondimento umanistico, scientifico, storico ed etico'}"
+${excludeDirective}
+
+Il tuo compito è creare due contenuti d'eccellenza, profondamente collegati nello spirito ma distinti nella forma:
+
+1. "La Massima del Giorno":
+- Una citazione autentica, aforisma memorabile o pensiero filosofico ed etico d'autore (in italiano, tra caporali «...»).
+- Espressa da un autentico pensatore, scienziato, filosofo, scrittore, statista o figura eminente della storia o della cultura mondiale.
+- Completa di nome dell'autore e opera/fonte reale (es. "Pensieri", "Etica Nicomachea", "Discorso sul metodo", "Lettere a Lucilio", "Diari", ecc.).
+
+2. L'articolo saggio «Aneddoto del Giorno»:
+- Un articolo saggio narrativo, avvincente, storicamente documentato e approfondito di 3-4 paragrafi completi (circa 250-350 parole totali, separati tassativamente da \\n\\n).
+- L'articolo deve raccontare una storia vera, poco nota o determinante della storia della scienza, della letteratura, delle esplorazioni, dell'arte o della vita della figura storica (o della grande scoperta/invenzione collegata alla massima).
+- Struttura dei paragrafi:
+  * Paragrafo 1: Contestualizzazione storica vivida, ambientazione temporale e geografica, circostanze iniziali.
+  * Paragrafo 2: L'ostacolo critico, il momento di svolta, il dilemma umano o l'intuizione imprevista.
+  * Paragrafo 3: L'esito storico documentato, l'impatto culturale o scientifico e la risonanza morale con la Massima del Giorno.
+
+Rispondi ESCLUSIVAMENTE con un JSON valido con questa struttura:
+{
+  "quote": "«Testo della massima in italiano tra virgolette caporali...»",
+  "author": "Nome dell'autore (es. Seneca, Marie Curie, Leonardo da Vinci, Confucio, Albert Einstein, Virginia Woolf, Blaise Pascal, ecc.)",
+  "source": "Opera, saggio, diario o contesto d'origine della citazione",
+  "anecdoteTitle": "Titolo narrativo, accattivante ed esatto dell'aneddoto storico",
+  "anecdote": "Primo paragrafo che introduce l'episodio storico, la data e il contesto.\\n\\nSecondo paragrafo con la sfida, l'evento clou o l'intuizione determinante.\\n\\nTerzo paragrafo con la risoluzione, l'impatto storico e il significato profondo collegato alla massima.",
+  "category": "${selectedInterest.category}",
+  "matchingTopic": "${selectedInterest.topic}"
+}`;
+
+        const response = await generateContentWithRetryAndFallback(ai, {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: {
+            tools: [{ googleSearch: {} }],
+            temperature: 0.5,
+          },
+        }, "gemini-3.6-flash");
+
+        const text = response.text || "{}";
+        const quoteData = safeExtractJson(text);
+
+        if (quoteData && quoteData.quote && quoteData.anecdote && quoteData.anecdoteTitle) {
+          const normTitle = normalizeServerText(quoteData.anecdoteTitle);
+          const normQuote = normalizeServerText(quoteData.quote);
+
+          if (!excludedNormItems.includes(normTitle) && !excludedNormItems.includes(normQuote)) {
+            registerQuoteInServerHistory(quoteData.quote, quoteData.author, quoteData.anecdoteTitle);
+            dailyQuoteCache.set(cacheKey, { quote: quoteData, timestamp: Date.now() });
+            return res.json({
+              success: true,
+              quote: quoteData,
+              sourceSheet: spreadsheetId ? "Google Fogli Connesso" : "Interessi Personali",
+            });
+          }
+        }
+      } catch (aiErr: any) {
+        if (isQuotaError(aiErr)) {
+          console.info("AI API quota reached for daily quote, serving non-duplicate curated quote.");
+        } else {
+          console.info("AI generation for daily quote failed, using curated catalog:", aiErr?.message || "Unavailable");
+        }
+      }
+    }
+
+    // Fallback con catalogo curato anti-duplicato
+    const nonDuplicatedQuotes = CURATED_DAILY_QUOTES.filter((q) => {
+      const normT = normalizeServerText(q.anecdoteTitle);
+      const normQ = normalizeServerText(q.quote);
+      return !excludedNormItems.includes(normT) && !excludedNormItems.includes(normQ);
+    });
+    const quotePool = nonDuplicatedQuotes.length > 0 ? nonDuplicatedQuotes : CURATED_DAILY_QUOTES;
+    const fallbackQuote = quotePool[effectiveIndex % quotePool.length];
+
+    registerQuoteInServerHistory(fallbackQuote.quote, fallbackQuote.author, fallbackQuote.anecdoteTitle);
+    dailyQuoteCache.set(cacheKey, { quote: fallbackQuote, timestamp: Date.now() });
+
+    return res.json({
+      success: true,
+      quote: fallbackQuote,
+      sourceSheet: "Interessi Personali (Archivio Curato)",
+    });
+  } catch (error: any) {
+    console.error("Error in /api/quote/daily:", error);
+    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+    const fallbackQuote = CURATED_DAILY_QUOTES[dayOfYear % CURATED_DAILY_QUOTES.length];
+    return res.json({
+      success: true,
+      quote: fallbackQuote,
       sourceSheet: "Interessi Personali (Predefiniti)",
     });
   }
@@ -3016,10 +3279,12 @@ app.get("/api/editorial/ledger-stats", (req, res) => {
       masterpiecesCount: serverMasterpiecesHistory.length,
       booksCount: serverBooksHistory.length,
       wordsCount: serverWordsHistory.length,
+      quotesCount: serverQuotesHistory.length,
       recentArticles: serverArticlesHistory.slice(-10).map(a => a.title),
       recentMasterpieces: serverMasterpiecesHistory.slice(-10).map(m => m.artworkTitle),
       recentBooks: serverBooksHistory.slice(-10).map(b => b.title),
       recentWords: serverWordsHistory.slice(-10).map(w => w.word),
+      recentQuotes: serverQuotesHistory.slice(-10).map(q => q.anecdoteTitle || q.quote),
     }
   });
 });

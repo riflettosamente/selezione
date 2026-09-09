@@ -41,57 +41,6 @@ export interface InterestItem {
   enabled: boolean;
 }
 
-export interface DigestArticle {
-  id: string;
-  title: string;
-  subtitle?: string;
-  topicRef?: string;
-  priority?: number;
-  readTime?: string;
-  badge?: string;
-  content: string;
-  keyTakeaway?: string;
-  sourceContext?: string;
-}
-
-export interface DigestSection {
-  category: string;
-  iconSuggestion?: string;
-  articles: DigestArticle[];
-}
-
-export interface DigestEditorial {
-  title: string;
-  author: string;
-  role: string;
-  content: string;
-  quote?: string;
-}
-
-export interface SpecialFeature {
-  title: string;
-  rubricName: string;
-  story: string;
-  whyItMatters: string;
-  triviaFact: string;
-}
-
-export interface DigestEdition {
-  id: string;
-  issueNumber: number;
-  editionTitle: string;
-  editionSubtitle: string;
-  publicationDate: string;
-  readingTimeMinutes: number;
-  editorial: DigestEditorial;
-  sections: DigestSection[];
-  specialFeature: SpecialFeature;
-  htmlContent: string;
-  generatedAt: string;
-  topicsUsedCount: number;
-  themeStyle?: "classic-digest" | "editorial-serif" | "modern-clean" | "warm-sepia";
-}
-
 export interface ArtMasterpiece {
   id?: string;
   artworkTitle: string;
@@ -142,6 +91,18 @@ export interface DailyWord {
   correctQuizIndex?: number;
   quizExplanation?: string;
   didYouKnow?: string;
+  sourceSheet?: string;
+}
+
+export interface DailyQuoteItem {
+  quote: string;
+  author: string;
+  source: string;
+  anecdoteTitle: string;
+  anecdote: string;
+  matchingTopic?: string;
+  category?: string;
+  date?: string;
   sourceSheet?: string;
 }
 
@@ -197,6 +158,16 @@ export interface StoredWordRecord {
   timestamp: number;
 }
 
+export interface StoredQuoteRecord {
+  quote: string;
+  author: string;
+  anecdoteTitle: string;
+  normalizedTitle: string;
+  date: string;
+  issueNumber: number;
+  timestamp: number;
+}
+
 export interface StoredIssueRecord {
   issueNumber: number;
   date: string;
@@ -207,6 +178,8 @@ export interface StoredIssueRecord {
   bookTitle: string;
   bookAuthor: string;
   word: string;
+  quoteTitle?: string;
+  quoteAuthor?: string;
   timestamp: number;
 }
 
@@ -217,6 +190,7 @@ export interface EditorialLedgerState {
   masterpieces: StoredMasterpieceRecord[];
   books: StoredBookRecord[];
   words: StoredWordRecord[];
+  quotes?: StoredQuoteRecord[];
   issues: StoredIssueRecord[];
   lastUpdated: number;
 }

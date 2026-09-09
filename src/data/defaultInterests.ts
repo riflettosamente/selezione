@@ -134,7 +134,7 @@ export const DEFAULT_INTERESTS: InterestItem[] = [
     id: "mistero-archeo",
     category: "Mistero",
     topic: "Archeologia Misteriosa e Luoghi Perduti",
-    description: "Approfondimento su siti enigmatici (Göbekli Tepe, Linee di Nazca), civiltà perdute (Atlantide) e teorie alternative.",
+    description: "Approfondimento su siti enigmatici come ad esempio Göbekli Tepe, Linee di Nazca, oppure civiltà perdute come ad esempio Atlantide e teorie alternative.",
     priority: 5,
     sources: "UNESCO, Antiquity, DAI, Archaeological Institute of America, Rilievi LiDAR",
     enabled: true,

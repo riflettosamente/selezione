@@ -3,11 +3,13 @@ import {
   ArtMasterpiece,
   RecommendedBook,
   DailyWord,
+  DailyQuoteItem,
   EditorialLedgerState,
   StoredArticleRecord,
   StoredMasterpieceRecord,
   StoredBookRecord,
   StoredWordRecord,
+  StoredQuoteRecord,
   StoredIssueRecord,
 } from "../types";
 
@@ -71,6 +73,7 @@ export function getEditorialLedger(): EditorialLedgerState {
           masterpieces: Array.isArray(parsed.masterpieces) ? parsed.masterpieces.slice(-MAX_LEDGER_RECORDS) : [],
           books: Array.isArray(parsed.books) ? parsed.books.slice(-MAX_LEDGER_RECORDS) : [],
           words: Array.isArray(parsed.words) ? parsed.words.slice(-MAX_LEDGER_RECORDS) : [],
+          quotes: Array.isArray(parsed.quotes) ? parsed.quotes.slice(-MAX_LEDGER_RECORDS) : [],
           issues: Array.isArray(parsed.issues) ? parsed.issues.slice(-MAX_LEDGER_RECORDS) : [],
           lastUpdated: parsed.lastUpdated || Date.now(),
         };
@@ -100,6 +103,7 @@ export function getEditorialLedger(): EditorialLedgerState {
           masterpieces: [],
           books: [],
           words: [],
+          quotes: [],
           issues: [],
           lastUpdated: Date.now(),
         };
@@ -118,6 +122,7 @@ export function getEditorialLedger(): EditorialLedgerState {
     masterpieces: [],
     books: [],
     words: [],
+    quotes: [],
     issues: [],
     lastUpdated: Date.now(),
   };
@@ -176,6 +181,8 @@ export function getExclusionLists(): {
   excludeBooks: string[];
   excludeAuthors: string[];
   excludeWords: string[];
+  excludeQuotes: string[];
+  excludeAnecdotes: string[];
   currentIssueNumber: number;
   totalPublishedIssues: number;
 } {
@@ -188,6 +195,8 @@ export function getExclusionLists(): {
     excludeBooks: ledger.books.map((b) => b.title),
     excludeAuthors: ledger.books.map((b) => b.author),
     excludeWords: ledger.words.map((w) => w.word),
+    excludeQuotes: (ledger.quotes || []).map((q) => q.quote),
+    excludeAnecdotes: (ledger.quotes || []).map((q) => q.anecdoteTitle),
     currentIssueNumber: ledger.currentIssueNumber || 1,
     totalPublishedIssues: ledger.issues.length,
   };
@@ -306,6 +315,11 @@ export function recordIssueInLedger(params: {
     category?: string;
     definition?: string;
   };
+  quote?: {
+    quote: string;
+    author: string;
+    anecdoteTitle: string;
+  };
 }): void {
   const ledger = getEditorialLedger();
   const issueNum = params.issueNumber || ledger.currentIssueNumber || 1;
@@ -383,6 +397,23 @@ export function recordIssueInLedger(params: {
     }
   }
 
+  const newQuotes: StoredQuoteRecord[] = [];
+  if (params.quote && (params.quote.quote || params.quote.anecdoteTitle)) {
+    const normTitle = normalizeLedgerText(params.quote.anecdoteTitle || params.quote.quote);
+    const existingQuotes = ledger.quotes || [];
+    if (!existingQuotes.some((q) => q.normalizedTitle === normTitle)) {
+      newQuotes.push({
+        quote: params.quote.quote,
+        author: params.quote.author || "",
+        anecdoteTitle: params.quote.anecdoteTitle || "",
+        normalizedTitle: normTitle,
+        date: params.date,
+        issueNumber: issueNum,
+        timestamp: now,
+      });
+    }
+  }
+
   const isIssueRecorded = ledger.issues.some((i) => i.issueNumber === issueNum);
   const newIssues: StoredIssueRecord[] = isIssueRecorded
     ? ledger.issues
@@ -398,6 +429,8 @@ export function recordIssueInLedger(params: {
           bookTitle: params.book?.title || "",
           bookAuthor: params.book?.author || "",
           word: params.word?.word || "",
+          quoteTitle: params.quote?.anecdoteTitle || "",
+          quoteAuthor: params.quote?.author || "",
           timestamp: now,
         },
       ];
@@ -409,6 +442,7 @@ export function recordIssueInLedger(params: {
     masterpieces: [...ledger.masterpieces, ...newMasterpieces].slice(-MAX_LEDGER_RECORDS),
     books: [...ledger.books, ...newBooks].slice(-MAX_LEDGER_RECORDS),
     words: [...ledger.words, ...newWords].slice(-MAX_LEDGER_RECORDS),
+    quotes: [...(ledger.quotes || []), ...newQuotes].slice(-MAX_LEDGER_RECORDS),
     issues: newIssues.slice(-MAX_LEDGER_RECORDS),
     lastUpdated: now,
   };
