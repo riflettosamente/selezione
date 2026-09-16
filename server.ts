@@ -659,6 +659,147 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Directory per la conservazione persistente delle edizioni quotidiane ("edizione-OGGI.json")
+const EDITIONS_DIR = path.join(process.cwd(), "data", "editions");
+if (!fs.existsSync(EDITIONS_DIR)) {
+  try {
+    fs.mkdirSync(EDITIONS_DIR, { recursive: true });
+  } catch (err) {
+    console.error("Errore creazione cartella data/editions:", err);
+  }
+}
+
+function getDailyEditionFilePath(dateKey: string): string {
+  return path.join(EDITIONS_DIR, `edizione-${dateKey}.json`);
+}
+
+function getTodayAliasFilePath(): string {
+  return path.join(EDITIONS_DIR, "edizione-OGGI.json");
+}
+
+function loadDailyEdition(dateKey?: string): any | null {
+  try {
+    const key = dateKey || new Date().toISOString().slice(0, 10);
+    const datedFile = getDailyEditionFilePath(key);
+    if (fs.existsSync(datedFile)) {
+      const content = fs.readFileSync(datedFile, "utf-8");
+      return JSON.parse(content);
+    }
+    const todayAlias = getTodayAliasFilePath();
+    if (fs.existsSync(todayAlias)) {
+      const content = fs.readFileSync(todayAlias, "utf-8");
+      const parsed = JSON.parse(content);
+      if (parsed && (parsed.date === key || !dateKey)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn("Avviso lettura file edizione:", err);
+  }
+  return null;
+}
+
+function saveDailyEditionProgress(editionData: any) {
+  try {
+    const key = editionData.date || new Date().toISOString().slice(0, 10);
+    const datedFile = getDailyEditionFilePath(key);
+    const todayAlias = getTodayAliasFilePath();
+    editionData.updatedAt = new Date().toISOString();
+    const jsonStr = JSON.stringify(editionData, null, 2);
+    fs.writeFileSync(datedFile, jsonStr, "utf-8");
+    fs.writeFileSync(todayAlias, jsonStr, "utf-8");
+  } catch (err) {
+    console.error("Errore salvataggio incrementale su file edizione:", err);
+  }
+}
+
+export const DEFAULT_EDITORIAL_INTERESTS: InterestItem[] = [
+  {
+    category: "Attualità",
+    topic: "News e Curiosità dal Mondo",
+    description: "Notizie di attualità globale, curiosità, fatti insoliti e storie dal mondo.",
+    priority: 5,
+    sources: "Reuters, BBC News, ANSA, National Geographic, Courrier International"
+  },
+  {
+    category: "Scienza",
+    topic: "Nuove Scoperte Scientifiche",
+    description: "Ultime frontiere della ricerca scientifica, scoperte tecnologiche e innovazioni.",
+    priority: 5,
+    sources: "Nature, Science, Le Scienze, MIT Technology Review, Phys.org"
+  },
+  {
+    category: "Scienza",
+    topic: "Astronomia e Spazio",
+    description: "Esplorazione spaziale, missioni, astrofisica.",
+    priority: 5,
+    sources: "NASA JPL, ESA, Astrophysical Journal, James Webb Space Telescope, ESO"
+  },
+  {
+    category: "Mistero",
+    topic: "UFO e Alieni",
+    description: "Monitoraggio di avvistamenti UAP/UFO, ricerca SETI ed esobiologia.",
+    priority: 5,
+    sources: "SETI Institute, The Black Vault, Declassified Archives, Astrobiology NASA"
+  },
+  {
+    category: "Cultura",
+    topic: "Narrativa Breve",
+    description: "Racconti, saggi brevi, storie di vita.",
+    priority: 4,
+    sources: "The New Yorker, The Paris Review, Adelphi, Letteratura internazionale"
+  },
+  {
+    category: "Salute",
+    topic: "Benessere e Alimentazione",
+    description: "Stili di vita sani, nutrizione, scoperte mediche.",
+    priority: 4,
+    sources: "The Lancet, Harvard Health Publishing, New England Journal of Medicine, Fondazione Veronesi"
+  },
+  {
+    category: "Storia",
+    topic: "Storia Contemporanea",
+    description: "Analisi di eventi storici recenti e lezioni dal passato.",
+    priority: 4,
+    sources: "Historical Journal, BBC History, Rivista Storica Italiana, Archivi Declassificati"
+  },
+  {
+    category: "Scienza dello Spirito",
+    topic: "Ricerche sulla Coscienza (NDE, OOBE)",
+    description: "Studi scientifici e fenomenologici su NDE, OOBE e natura della coscienza oltre il cervello.",
+    priority: 5,
+    sources: "NYU Langone (AWARE II), Journal of Near-Death Studies, Resuscitation, Nature Neuroscience"
+  },
+  {
+    category: "Cinema",
+    topic: "Film di Fantascienza",
+    description: "Analisi tematiche, recensioni e implicazioni filosofiche del cinema sci-fi.",
+    priority: 4,
+    sources: "BFI Sight & Sound, Cahiers du Cinéma, Criterion Collection, Saggi di cinema"
+  },
+  {
+    category: "Storia/Mito",
+    topic: "Miti e Leggende dell'Antichità",
+    description: "Comparazione di mitologie classiche (Grecia, Egitto, Cina, Giappone) e loro influenza culturale.",
+    priority: 4,
+    sources: "Treccani, Oxford Classical Dictionary, Saggi di Antropologia e Religioni comparate"
+  },
+  {
+    category: "Mistero",
+    topic: "Archeologia Misteriosa e Luoghi Perduti",
+    description: "Approfondimento su siti enigmatici (Göbekli Tepe, Linee di Nazca), civiltà perdute (Atlantide) e teorie alternative.",
+    priority: 5,
+    sources: "UNESCO, Antiquity, DAI, Archaeological Institute of America, Rilievi LiDAR"
+  },
+  {
+    category: "Folclore",
+    topic: "Piccolo Popolo e Creature del Folclore",
+    description: "Creature leggendarie dei boschi (elfi, gnomi, fate, yokai) e tradizioni orali di tutto il mondo.",
+    priority: 4,
+    sources: "Società di Etnologia Europea, Archivi delle Tradizioni Popolari, Studi antropologici"
+  }
+];
+
 // Cache for daily articles
 const dailyArticlesCache: Map<
   string,
@@ -881,104 +1022,6 @@ Rispondi in un blocco JSON con struttura { "articles": [...] }.`;
   }
 });
 
-// API per la generazione e ricerca live giornaliera di articoli tramite Google Web Search
-// Strettamente allineata agli argomenti e interessi definiti nel Google Sheet
-app.post("/api/articles/daily", async (req, res) => {
-  try {
-    const { interests, forceRefresh = false, dateFormatted = "", seed = 0, excludeIds = [], excludeTitles = [] } = req.body;
-
-    // Filtra solo gli interessi abilitati dal Google Sheet
-    const validInterests = Array.isArray(interests) && interests.length > 0
-      ? interests.filter((i: any) => i.enabled !== false)
-      : [];
-
-    const activeInterests = validInterests.length > 0 ? validInterests : [
-      {
-        category: "Attualità",
-        topic: "News e Curiosità dal Mondo",
-        description: "Notizie di attualità globale, curiosità, fatti insoliti e storie dal mondo.",
-        priority: 5,
-        sources: "Reuters, BBC News, ANSA, National Geographic, Courrier International"
-      },
-      {
-        category: "Scienza",
-        topic: "Nuove Scoperte Scientifiche",
-        description: "Ultime frontiere della ricerca scientifica, scoperte tecnologiche e innovazioni.",
-        priority: 5,
-        sources: "Nature, Science, Le Scienze, MIT Technology Review, Phys.org"
-      },
-      {
-        category: "Scienza",
-        topic: "Astronomia e Spazio",
-        description: "Esplorazione spaziale, missioni, astrofisica.",
-        priority: 5,
-        sources: "NASA JPL, ESA, Astrophysical Journal, James Webb Space Telescope, ESO"
-      },
-      {
-        category: "Mistero",
-        topic: "UFO e Alieni",
-        description: "Monitoraggio di avvistamenti UAP/UFO, ricerca SETI ed esobiologia.",
-        priority: 5,
-        sources: "SETI Institute, The Black Vault, Declassified Archives, Astrobiology NASA"
-      },
-      {
-        category: "Cultura",
-        topic: "Narrativa Breve",
-        description: "Racconti, saggi brevi, storie di vita.",
-        priority: 4,
-        sources: "The New Yorker, The Paris Review, Adelphi, Letteratura internazionale"
-      },
-      {
-        category: "Salute",
-        topic: "Benessere e Alimentazione",
-        description: "Stili di vita sani, nutrizione, scoperte mediche.",
-        priority: 4,
-        sources: "The Lancet, Harvard Health Publishing, New England Journal of Medicine, Fondazione Veronesi"
-      },
-      {
-        category: "Storia",
-        topic: "Storia Contemporanea",
-        description: "Analisi di eventi storici recenti e lezioni dal passato.",
-        priority: 4,
-        sources: "Historical Journal, BBC History, Rivista Storica Italiana, Archivi Declassificati"
-      },
-      {
-        category: "Scienza dello Spirito",
-        topic: "Ricerche sulla Coscienza (NDE, OOBE)",
-        description: "Studi scientifici e fenomenologici su NDE, OOBE e natura della coscienza oltre il cervello.",
-        priority: 5,
-        sources: "NYU Langone (AWARE II), Journal of Near-Death Studies, Resuscitation, Nature Neuroscience"
-      },
-      {
-        category: "Cinema",
-        topic: "Film di Fantascienza",
-        description: "Analisi tematiche, recensioni e implicazioni filosofiche del cinema sci-fi.",
-        priority: 4,
-        sources: "BFI Sight & Sound, Cahiers du Cinéma, Criterion Collection, Saggi di cinema"
-      },
-      {
-        category: "Storia/Mito",
-        topic: "Miti e Leggende dell'Antichità",
-        description: "Comparazione di mitologie classiche (Grecia, Egitto, Cina, Giappone) e loro influenza culturale.",
-        priority: 4,
-        sources: "Treccani, Oxford Classical Dictionary, Saggi di Antropologia e Religioni comparate"
-      },
-      {
-        category: "Mistero",
-        topic: "Archeologia Misteriosa e Luoghi Perduti",
-        description: "Approfondimento su siti enigmatici (Göbekli Tepe, Linee di Nazca), civiltà perdute (Atlantide) e teorie alternative.",
-        priority: 5,
-        sources: "UNESCO, Antiquity, DAI, Archaeological Institute of America, Rilievi LiDAR"
-      },
-      {
-        category: "Folclore",
-        topic: "Piccolo Popolo e Creature del Folclore",
-        description: "Creature leggendarie dei boschi (elfi, gnomi, fate, yokai) e tradizioni orali di tutto il mondo.",
-        priority: 4,
-        sources: "Società di Etnologia Europea, Archivi delle Tradizioni Popolari, Studi antropologici"
-      }
-    ];
-
 function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateFormatted: string, seed: number = 0) {
   const interests = Array.isArray(activeInterests) && activeInterests.length > 0
     ? activeInterests
@@ -1140,13 +1183,39 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
   return articles;
 }
 
+// API per la generazione e ricerca live giornaliera di articoli tramite Google Web Search
+// Strettamente allineata agli argomenti e interessi definiti nel Google Sheet
+app.post("/api/articles/daily", async (req, res) => {
+  try {
+    const { interests, forceRefresh = false, dateFormatted = "", seed = 0, excludeIds = [], excludeTitles = [] } = req.body;
+
+    // Filtra solo gli interessi abilitati dal Google Sheet
+    const validInterests = Array.isArray(interests) && interests.length > 0
+      ? interests.filter((i: any) => i.enabled !== false)
+      : [];
+
+    const activeInterests = validInterests.length > 0 ? validInterests : DEFAULT_EDITORIAL_INTERESTS;
+
     const todayDateKey = new Date().toISOString().slice(0, 10);
     const cacheKey = `daily_articles_${todayDateKey}`;
 
-    if (forceRefresh) {
-      dailyArticlesCache.delete(cacheKey);
-    } else {
-      // Controlla cache condivisa del server (valida per 24 ore)
+    if (!forceRefresh) {
+      // 1. Priorità massima: Edizione quotidiana pre-generata su file persistente (conservata per 24h)
+      const fileEdition = loadDailyEdition(todayDateKey);
+      if (fileEdition && Array.isArray(fileEdition.articles) && fileEdition.articles.length >= 8) {
+        return res.json({
+          success: true,
+          articles: fileEdition.articles,
+          groundingSources: fileEdition.groundingSources || [],
+          webSearchQueries: fileEdition.webSearchQueries || [],
+          matchedTopicsCount: activeInterests.length,
+          count: fileEdition.articles.length,
+          mode: "daily_file_edition",
+          sourceFile: `edizione-${todayDateKey}.json`
+        });
+      }
+
+      // 2. Controlla cache condivisa del server in memoria (valida per 24 ore)
       const cached = dailyArticlesCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24 && cached.articles.length > 0) {
         return res.json({
@@ -1159,6 +1228,8 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
           source: "server_cache"
         });
       }
+    } else {
+      dailyArticlesCache.delete(cacheKey);
     }
 
     if (hasAnyAiKey()) {
@@ -1646,13 +1717,27 @@ app.post("/api/book/recommended", async (req, res) => {
     const todayDateKey = new Date().toISOString().slice(0, 10);
     const cacheKey = `daily_book_${todayDateKey}`;
 
-    const cached = bookRecommendationCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24) {
-      return res.json({
-        success: true,
-        book: cached.book,
-        sourceSheet: "Personal Digest (Server Cache)",
-      });
+    if (!forceRefresh) {
+      const fileEdition = loadDailyEdition(todayDateKey);
+      if (fileEdition && fileEdition.book && fileEdition.book.title) {
+        return res.json({
+          success: true,
+          book: fileEdition.book,
+          sourceSheet: "Personal Digest (Edizione Odierna Archiviata)",
+          sourceFile: `edizione-${todayDateKey}.json`
+        });
+      }
+
+      const cached = bookRecommendationCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24) {
+        return res.json({
+          success: true,
+          book: cached.book,
+          sourceSheet: "Personal Digest (Server Cache)",
+        });
+      }
+    } else {
+      bookRecommendationCache.delete(cacheKey);
     }
 
     let activeInterests: InterestItem[] = [];
@@ -1990,13 +2075,27 @@ app.post("/api/word/daily", async (req, res) => {
     const todayDateKey = new Date().toISOString().slice(0, 10);
     const cacheKey = `daily_word_${todayDateKey}`;
 
-    const cached = dailyWordCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24) {
-      return res.json({
-        success: true,
-        word: cached.word,
-        sourceSheet: "Personal Digest (Server Cache)",
-      });
+    if (!forceRefresh) {
+      const fileEdition = loadDailyEdition(todayDateKey);
+      if (fileEdition && fileEdition.word && fileEdition.word.word) {
+        return res.json({
+          success: true,
+          word: fileEdition.word,
+          sourceSheet: "Personal Digest (Edizione Odierna Archiviata)",
+          sourceFile: `edizione-${todayDateKey}.json`
+        });
+      }
+
+      const cached = dailyWordCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24) {
+        return res.json({
+          success: true,
+          word: cached.word,
+          sourceSheet: "Personal Digest (Server Cache)",
+        });
+      }
+    } else {
+      dailyWordCache.delete(cacheKey);
     }
 
     let activeInterests: InterestItem[] = [];
@@ -2208,6 +2307,16 @@ app.post(["/api/quote/daily", "/api/anecdote/daily"], async (req, res) => {
     const cacheKey = `daily_quote_${todayDateKey}`;
 
     if (!forceRefresh) {
+      const fileEdition = loadDailyEdition(todayDateKey);
+      if (fileEdition && fileEdition.quote && fileEdition.quote.quote) {
+        return res.json({
+          success: true,
+          quote: fileEdition.quote,
+          sourceSheet: "Personal Digest (Edizione Odierna Archiviata)",
+          sourceFile: `edizione-${todayDateKey}.json`
+        });
+      }
+
       const cached = dailyQuoteCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24) {
         return res.json({
@@ -2216,6 +2325,8 @@ app.post(["/api/quote/daily", "/api/anecdote/daily"], async (req, res) => {
           sourceSheet: "Personal Digest (Server Cache)",
         });
       }
+    } else {
+      dailyQuoteCache.delete(cacheKey);
     }
 
     let activeInterests: InterestItem[] = [];
@@ -3077,6 +3188,16 @@ app.post("/api/art/masterpiece", async (req, res) => {
     const cacheKey = `daily_art_v9_${todayDateKey}_seed_${seed}_int_${interestsSignature.length}`;
 
     if (!forceRefresh) {
+      const fileEdition = loadDailyEdition(todayDateKey);
+      if (fileEdition && fileEdition.masterpiece && fileEdition.masterpiece.artworkTitle) {
+        return res.json({
+          success: true,
+          masterpiece: fileEdition.masterpiece,
+          sourceSheet: "Personal Digest (Edizione Odierna Archiviata)",
+          sourceFile: `edizione-${todayDateKey}.json`
+        });
+      }
+
       const cached = artMasterpieceCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24 && cached.masterpiece) {
         if (cached.masterpiece.artworkTitle && cached.masterpiece.imageUrl && cached.masterpiece.imageUrl.startsWith("http")) {
@@ -3270,6 +3391,569 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato valido:
   }
 });
 
+// ============================================================================
+// ARCHITETTURA EDIZIONE QUOTIDIANA: ELABORAZIONE SEQUENZIALE A SCAGLIONI E SALVATAGGIO SU FILE
+// ============================================================================
+
+let isGeneratingDailyEdition = false;
+let dailyEditionProgress = {
+  isGenerating: false,
+  date: "",
+  step: "",
+  currentStep: 0,
+  totalSteps: 13,
+  percent: 0,
+  updatedAt: ""
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function generateSingleArticleAi(
+  interest: any,
+  index: number,
+  total: number,
+  dateFormatted: string,
+  isCondensed: boolean,
+  excludeTitles: string[] = []
+): Promise<{ article: any; webLinks: any[]; webSearchQueries: string[] }> {
+  const p = interest.priority ? `[Priorità: ${interest.priority}/5]` : "";
+  const cat = interest.category ? `[Categoria: ${interest.category}]` : "";
+  const desc = interest.description ? ` - Dettagli: ${interest.description}` : "";
+  const src = interest.sources ? ` - Fonti raccomandate: ${interest.sources}` : "";
+  const topicDirective = `${cat} ${p} "${interest.topic}"${desc}${src}`;
+
+  const excludeDirective = Array.isArray(excludeTitles) && excludeTitles.length > 0
+    ? `\nTITOLI GIÀ PRESENTI DA EVITARE ASSOLUTAMENTE:\n- ${excludeTitles.slice(0, 25).join("\n- ")}\n`
+    : "";
+
+  const systemPrompt = `Sei il Capo Redattore di "Personal Digest", prestigiosa rivista quotidiana d'autore nello stile del Reader's Digest / Selezione.
+
+REGOLA FONDAMENTALE DI AUTENTICITÀ:
+1. L'articolo DEVE essere un vero pezzo giornalistico basato su scoperte reali, scavi archeologici, missioni spaziali, fatti storici o ricerche scientifiche effettive.
+2. È SEVERAMENTE VIETATO usare formule generiche o scheletriche come "L'Evoluzione di [Tema]: Dalle Origini alle Nuove Scoperte" o sottotitoli tipo "1. L'Origine del Fenomeno / 2. Il Valore dei Dati / 3. Le Prospettive Future".
+3. Includi sempre nomi reali di scienziati, ricercatori, istituti, atenei, scavi, missioni o archivi, con luoghi e parametri concreti.
+4. Fornisci da 2 a 3 FONTI WEB REALI ED ESISTENTI (titolo del paper o articolo, URL reale dell'ente/rivista come Nature, Science, NASA, Parco Archeologico, UNESCO, Treccani, Le Scienze, e nome editore). MAI link finti tipo google.com/search?q=...
+${excludeDirective}
+
+LUNGHEZZA E STRUTTURA EDITORIALE (OBIETTIVO 900 PAROLE):
+- L'articolo NON deve essere un riassunto sbrigativo o sintetico. Deve essere un saggio giornalistico ricco, denso ed esaustivo di circa 900 parole (850-950 parole), diviso in 4-6 sezioni narrative con sottotitoli markdown '### Titolo Sezione', ricco di spiegazioni approfondite, aneddoti, dati, citazioni e prospettive.
+- ${isCondensed ? "Trattandosi di un'opera monografica condensata, scrivi un saggio ampio di 1100-1300 parole diviso in capitoli." : ""}
+
+FORMATO JSON:
+Rispondi ESCLUSIVAMENTE con un JSON strutturato con la proprietà "article":
+{
+  "article": {
+    "id": "art-${index + 1}-${Date.now()}",
+    "category": "${interest.category || 'Cultura'}",
+    "topicRef": "${interest.topic}",
+    "title": "Titolo giornalistico accattivante, colto e specifico",
+    "shortTitle": "Titolo sintetico (3-6 parole)",
+    "excerpt": "Sintesi narrativa accattivante di 3-4 righe (40-60 parole)",
+    "content": "Testo approfondito diviso con sottotitoli markdown (### Titolo Sezione). ${isCondensed ? "Scrivi un saggio monografico ampio di 1100-1300 parole diviso in capitoli." : "Scrivi un saggio approfondito, dettagliato e appassionante di circa 900 parole (850-950 parole), articolato in 4-6 sezioni narrative con sottotitoli markdown (### Titolo Sezione), ricco di aneddoti, spiegazioni dettagliate, evidenze storiche o scientifiche, citazioni dirette e contestualizzazione culturale da vera rivista d'autore."}",
+    "readingTime": "${isCondensed ? '11 min' : '8 min'}",
+    "author": "Nome e qualifica del divulgatore/giornalista",
+    "date": "${dateFormatted || "Oggi"}",
+    "highlightQuote": "Citazione significativa o riflessione cardine",
+    "originalLanguage": "Italiano",
+    "isCondensedBook": ${isCondensed},
+    "sources": [
+      {
+        "title": "Titolo dello studio o pubblicazione",
+        "url": "URL reale della fonte",
+        "publisher": "Nome ente o rivista accreditata",
+        "originalLanguage": "Italiano / Inglese",
+        "keyFinding": "Sintesi di una frase del riscontro documentato"
+      }
+    ]
+  }
+}`;
+
+  const userPrompt = `Scrivi l'articolo giornalistico di circa 900 parole (850-950 parole) per il seguente tema d'interesse:
+${topicDirective}
+
+Ricorda: deve essere un pezzo completo, approfondito, con 4-6 sezioni narrative markdown (### Titolo Sezione) e fonti reali.`;
+
+  if (hasAnyAiKey()) {
+    try {
+      const ai = getGemini();
+      const response = await generateContentWithRetryAndFallback(ai, {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction: systemPrompt,
+          tools: [{ googleSearch: {} }],
+          temperature: 0.45,
+        },
+      }, "gemini-3.1-flash-lite");
+
+      const responseText = response.text || "{}";
+      const parsedData: any = safeExtractJson(responseText) || {};
+      const art = parsedData.article || (Array.isArray(parsedData.articles) ? parsedData.articles[0] : null) || parsedData;
+
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const webSearchQueries = response.candidates?.[0]?.groundingMetadata?.webSearchQueries || [];
+      const webLinks = groundingChunks
+        .map((c: any) => c.web)
+        .filter((w: any) => w && w.uri)
+        .map((w: any) => ({
+          title: w.title || "Fonte Web Verificata",
+          url: w.uri,
+          publisher: extractDomainName(w.uri) || "Fonte Web Accreditata"
+        }));
+
+      if (art && art.title && art.content && art.content.length > 200) {
+        art.id = art.id || `art-${index + 1}-${Date.now()}`;
+        art.category = art.category || interest.category || "Cultura & Scienza";
+        art.topicRef = art.topicRef || interest.topic;
+        art.date = art.date || dateFormatted;
+        art.isCondensedBook = Boolean(isCondensed);
+        if (webLinks.length > 0 && (!Array.isArray(art.sources) || art.sources.length === 0)) {
+          art.sources = webLinks.slice(0, 3).map((wl: any) => ({
+            title: wl.title,
+            url: wl.url,
+            publisher: wl.publisher,
+            originalLanguage: "Italiano",
+            keyFinding: "Fonte rilevata e verificata tramite scansione Google Search in tempo reale."
+          }));
+        }
+        return { article: art, webLinks, webSearchQueries };
+      }
+    } catch (err: any) {
+      console.warn(`[Generazione Sequenziale Articolo ${index + 1}] Errore AI:`, err?.message || err);
+    }
+  }
+
+  // Fallback garantito per il tema specifico
+  const fallbackList = buildDynamicInterestsFallbackArticles([interest], dateFormatted, index);
+  const fallbackArt = fallbackList[0] || {
+    id: `art-fallback-${index + 1}`,
+    title: `Approfondimento su ${interest.topic}`,
+    shortTitle: interest.topic,
+    category: interest.category || "Cultura",
+    topicRef: interest.topic,
+    excerpt: `Un approfondito saggio dedicato a ${interest.topic}.`,
+    content: `### Le Fonti e il Quadro Generale\n\nAnalisi di ${interest.topic} nel panorama odierno.\n\n### Scenari e Riscontri Documentati\n\nGli studi attuali confermano la rilevanza del tema.`,
+    readingTime: "8 min",
+    author: "Redazione Personal Digest",
+    date: dateFormatted,
+    isCondensedBook: Boolean(isCondensed)
+  };
+  if (isCondensed) {
+    fallbackArt.isCondensedBook = true;
+  }
+  return { article: fallbackArt, webLinks: [], webSearchQueries: [] };
+}
+
+async function generateDailyEditionSequential(options?: { dateKey?: string; force?: boolean }): Promise<any> {
+  const dateKey = options?.dateKey || new Date().toISOString().slice(0, 10);
+  const dateFormatted = new Date().toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+
+  if (isGeneratingDailyEdition) {
+    console.log("[Generazione Sequenziale] Un ciclo di generazione è già in corso. Restituisco stato corrente.");
+    return loadDailyEdition(dateKey);
+  }
+
+  const existing = loadDailyEdition(dateKey);
+  if (existing && existing.status === "complete" && !options?.force) {
+    console.log(`[Generazione Sequenziale] Edizione per ${dateKey} già presente e completa su file.`);
+    return existing;
+  }
+
+  isGeneratingDailyEdition = true;
+  dailyEditionProgress = {
+    isGenerating: true,
+    date: dateKey,
+    step: "Inizio redazione sequenziale dell'edizione odierna",
+    currentStep: 0,
+    totalSteps: 13,
+    percent: 0,
+    updatedAt: new Date().toISOString()
+  };
+
+  const seed = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+  const activeInterests = DEFAULT_EDITORIAL_INTERESTS;
+
+  const edition: any = existing && existing.date === dateKey ? existing : {
+    date: dateKey,
+    dateFormatted,
+    status: "in_progress",
+    step: "Avvio redazione sequenziale a scaglioni",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    articles: [],
+    masterpiece: null,
+    book: null,
+    word: null,
+    quote: null,
+    groundingSources: [],
+    webSearchQueries: []
+  };
+
+  // Salvataggio iniziale su disco
+  saveDailyEditionProgress(edition);
+
+  try {
+    // --- 1. CAPOLAVORO D'ARTE ---
+    dailyEditionProgress.currentStep = 1;
+    dailyEditionProgress.step = "Ricerca e analisi del Capolavoro d'Arte";
+    dailyEditionProgress.percent = Math.round((1 / 13) * 100);
+    dailyEditionProgress.updatedAt = new Date().toISOString();
+
+    if (!edition.masterpiece || options?.force) {
+      console.log("[Generazione Sequenziale 1/13] Ricerca e redazione Capolavoro d'Arte...");
+      const artInterest = activeInterests[seed % activeInterests.length] || activeInterests[0];
+      let mp: any = null;
+
+      if (hasAnyAiKey()) {
+        try {
+          const ai = getGemini();
+          const artPrompt = `Sei il curatore storico dell'arte per "Personal Digest". Trova una celebre opera d'arte reale che dialoga con il tema "${artInterest.topic}" (${artInterest.category}). Rispondi in JSON valido con: artworkTitle, artist, year, museum, city, artworkType, matchingCategory, matchingTopic, whyConnected, imageUrl, article (con title, shortTitle, excerpt, content in 5 sezioni con titoli markdown, readingTime, author, date: "${dateKey}", highlightQuote, sources).`;
+          const response = await generateContentWithRetryAndFallback(ai, {
+            contents: [{ role: "user", parts: [{ text: artPrompt }] }],
+            config: { tools: [{ googleSearch: {} }], temperature: 0.4 }
+          }, "gemini-3.6-flash");
+
+          const parsed = safeExtractJson(response.text || "{}");
+          if (parsed?.artworkTitle && parsed?.artist && parsed?.article) {
+            const liveImg = await searchWikimediaImage(parsed.artist, parsed.artworkTitle, parsed.imageUrl);
+            if (liveImg) {
+              parsed.imageUrl = liveImg;
+              parsed.article.imageUrl = liveImg;
+            }
+            mp = parsed;
+          }
+        } catch (e: any) {
+          console.warn("[Generazione Sequenziale] Fallback per capolavoro d'arte:", e?.message || e);
+        }
+      }
+
+      if (!mp) {
+        mp = getCuratedThematicMasterpiece(artInterest, seed, dateKey);
+        const liveImg = await searchWikimediaImage(mp.artist, mp.artworkTitle, mp.imageUrl);
+        if (liveImg) {
+          mp.imageUrl = liveImg;
+          if (mp.article) mp.article.imageUrl = liveImg;
+        }
+      }
+
+      edition.masterpiece = mp;
+      registerMasterpieceInServerHistory(mp.artworkTitle, mp.artist);
+      saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 1/13] ✓ Capolavoro d'Arte salvato su file: "${mp.artworkTitle}"`);
+      await sleep(3000);
+    }
+
+    // --- 2..10. ARTICOLI SEQUENZIALI (UNO ALLA VOLTA CON PAUSA) ---
+    const targetArticles = activeInterests.slice(0, 9); // 8 sommario + 1 libro condensato
+    if (!Array.isArray(edition.articles)) {
+      edition.articles = [];
+    }
+
+    for (let i = 0; i < targetArticles.length; i++) {
+      const stepIndex = i + 2;
+      const interest = targetArticles[i];
+      const isCondensed = i === targetArticles.length - 1;
+
+      dailyEditionProgress.currentStep = stepIndex;
+      dailyEditionProgress.step = `Redazione articolo ${i + 1} di ${targetArticles.length}: "${interest.topic}"`;
+      dailyEditionProgress.percent = Math.round((stepIndex / 13) * 100);
+      dailyEditionProgress.updatedAt = new Date().toISOString();
+
+      if (edition.articles[i] && edition.articles[i].title && !options?.force) {
+        console.log(`[Generazione Sequenziale ${stepIndex}/13] Articolo ${i + 1} già presente in archivio: "${edition.articles[i].title}". Salto.`);
+        continue;
+      }
+
+      console.log(`[Generazione Sequenziale ${stepIndex}/13] Redazione articolo ${i + 1}/${targetArticles.length}: "${interest.topic}" (${interest.category})...`);
+
+      const currentTitles = edition.articles.map((a: any) => a.title).filter(Boolean);
+      const resArt = await generateSingleArticleAi(interest, i, targetArticles.length, dateFormatted, isCondensed, currentTitles);
+
+      edition.articles[i] = resArt.article;
+      if (Array.isArray(resArt.webLinks) && resArt.webLinks.length > 0) {
+        edition.groundingSources.push(...resArt.webLinks);
+      }
+      if (Array.isArray(resArt.webSearchQueries) && resArt.webSearchQueries.length > 0) {
+        edition.webSearchQueries.push(...resArt.webSearchQueries);
+      }
+
+      registerArticlesInServerHistory([resArt.article]);
+      edition.step = `Articolo ${i + 1} completato: ${resArt.article.title}`;
+      saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale ${stepIndex}/13] ✓ Articolo ${i + 1} salvato su file: "${resArt.article.title}"`);
+
+      // Pausa di 3 secondi per azzerare contatore token ed evitare overflow
+      await sleep(3000);
+    }
+
+    // --- 11. LIBRO CONSIGLIATO ---
+    dailyEditionProgress.currentStep = 11;
+    dailyEditionProgress.step = "Redazione Libro Consigliato del Giorno";
+    dailyEditionProgress.percent = Math.round((11 / 13) * 100);
+    dailyEditionProgress.updatedAt = new Date().toISOString();
+
+    if (!edition.book || options?.force) {
+      console.log("[Generazione Sequenziale 11/13] Selezione e redazione Libro Consigliato...");
+      const bookInterest = activeInterests[(seed + 2) % activeInterests.length] || activeInterests[0];
+      let bk: any = null;
+
+      if (hasAnyAiKey()) {
+        try {
+          const ai = getGemini();
+          const bookPrompt = `Sei il curatore letterario per "Personal Digest". Seleziona un reale e celebre saggio/libro collegato a "${bookInterest.topic}" (${bookInterest.category}). Rispondi in JSON valido con: title, author, year, publisher, category, matchingTopic, synopsis (3 paragrafi ricchi), whyRecommended, highlightQuote, readingTime, pagesCount.`;
+          const response = await generateContentWithRetryAndFallback(ai, {
+            contents: [{ role: "user", parts: [{ text: bookPrompt }] }],
+            config: { tools: [{ googleSearch: {} }], temperature: 0.4 }
+          }, "gemini-3.6-flash");
+
+          const parsed = safeExtractJson(response.text || "{}");
+          if (parsed?.title && parsed?.author) {
+            bk = parsed;
+          }
+        } catch (e: any) {
+          console.warn("[Generazione Sequenziale] Fallback per libro:", e?.message || e);
+        }
+      }
+
+      if (!bk) {
+        bk = CURATED_RECOMMENDED_BOOKS[seed % CURATED_RECOMMENDED_BOOKS.length];
+      }
+
+      edition.book = bk;
+      registerBookInServerHistory(bk.title, bk.author);
+      saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 11/13] ✓ Libro Consigliato salvato su file: "${bk.title}"`);
+      await sleep(2500);
+    }
+
+    // --- 12. PAROLA DEL GIORNO ---
+    dailyEditionProgress.currentStep = 12;
+    dailyEditionProgress.step = "Redazione Parola del Giorno (Più parole, più idee)";
+    dailyEditionProgress.percent = Math.round((12 / 13) * 100);
+    dailyEditionProgress.updatedAt = new Date().toISOString();
+
+    if (!edition.word || options?.force) {
+      console.log("[Generazione Sequenziale 12/13] Redazione Parola del Giorno...");
+      const wordInterest = activeInterests[(seed + 4) % activeInterests.length] || activeInterests[0];
+      let wd: any = null;
+
+      if (hasAnyAiKey()) {
+        try {
+          const ai = getGemini();
+          const wordPrompt = `Sei il filologo della rubrica "Più parole, più idee" per "Personal Digest". Scegli una parola italiana affascinante collegata a "${wordInterest.topic}". Rispondi in JSON valido con: word, pronunciation, grammaticalCategory, etymology, definition, nuancedUsage, literaryQuote (quote, author, workTitle, year), philologicalQuiz (question, options: 4 opzioni, correctQuizIndex: 0-3, quizExplanation), didYouKnow.`;
+          const response = await generateContentWithRetryAndFallback(ai, {
+            contents: [{ role: "user", parts: [{ text: wordPrompt }] }],
+            config: { temperature: 0.5 }
+          }, "gemini-3.1-flash-lite");
+
+          const parsed = safeExtractJson(response.text || "{}");
+          if (parsed?.word && parsed?.definition) {
+            wd = parsed;
+          }
+        } catch (e: any) {
+          console.warn("[Generazione Sequenziale] Fallback per parola del giorno:", e?.message || e);
+        }
+      }
+
+      if (!wd) {
+        wd = CURATED_DAILY_WORDS[seed % CURATED_DAILY_WORDS.length];
+      }
+
+      edition.word = wd;
+      registerWordInServerHistory(wd.word);
+      saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 12/13] ✓ Parola del Giorno salvata su file: "${wd.word}"`);
+      await sleep(2500);
+    }
+
+    // --- 13. MASSIMA DEL GIORNO CON ANEDDOTO ---
+    dailyEditionProgress.currentStep = 13;
+    dailyEditionProgress.step = "Redazione Massima del Giorno con Aneddoto Storico";
+    dailyEditionProgress.percent = 100;
+    dailyEditionProgress.updatedAt = new Date().toISOString();
+
+    if (!edition.quote || options?.force) {
+      console.log("[Generazione Sequenziale 13/13] Redazione Massima del Giorno con Aneddoto...");
+      const quoteInterest = activeInterests[(seed + 6) % activeInterests.length] || activeInterests[0];
+      let qt: any = null;
+
+      if (hasAnyAiKey()) {
+        try {
+          const ai = getGemini();
+          const quotePrompt = `Sei il curatore della rubrica "La Massima del Giorno" per "Personal Digest". Fornisci una celebre massima con aneddoto storico ispirata a "${quoteInterest.topic}". Rispondi in JSON valido con: quote, author, authorRole, lifeSpan, context, reflection, anecdoteTitle, anecdote, practicalApplication.`;
+          const response = await generateContentWithRetryAndFallback(ai, {
+            contents: [{ role: "user", parts: [{ text: quotePrompt }] }],
+            config: { temperature: 0.5 }
+          }, "gemini-3.6-flash");
+
+          const parsed = safeExtractJson(response.text || "{}");
+          if (parsed?.quote && parsed?.anecdote) {
+            qt = parsed;
+          }
+        } catch (e: any) {
+          console.warn("[Generazione Sequenziale] Fallback per massima del giorno:", e?.message || e);
+        }
+      }
+
+      if (!qt) {
+        qt = CURATED_DAILY_QUOTES[seed % CURATED_DAILY_QUOTES.length];
+      }
+
+      edition.quote = qt;
+      registerQuoteInServerHistory(qt.quote, qt.author, qt.anecdoteTitle);
+      console.log(`[Generazione Sequenziale 13/13] ✓ Massima del Giorno salvata su file: "${qt.quote?.slice(0, 30)}..."`);
+    }
+
+    // SIGILLO FINALE DELL'EDIZIONE QUOTIDIANA (CONSERVATA PER 24 ORE)
+    edition.status = "complete";
+    edition.completedAt = new Date().toISOString();
+    edition.step = "Edizione completa e sigillata per 24 ore";
+    saveDailyEditionProgress(edition);
+
+    dailyEditionProgress.isGenerating = false;
+    dailyEditionProgress.step = "Edizione completata con successo";
+    dailyEditionProgress.updatedAt = new Date().toISOString();
+
+    console.log(`🎉 [Generazione Sequenziale Completata] Edizione per ${dateKey} interamente redatta e salvata su:`);
+    console.log(`   - ${getDailyEditionFilePath(dateKey)}`);
+    console.log(`   - ${getTodayAliasFilePath()}`);
+
+    return edition;
+  } catch (err: any) {
+    console.error("[Generazione Sequenziale] Errore imprevisto:", err);
+    edition.status = "partial_error";
+    edition.step = `Interrotto: ${err?.message || err}`;
+    saveDailyEditionProgress(edition);
+    return edition;
+  } finally {
+    isGeneratingDailyEdition = false;
+    dailyEditionProgress.isGenerating = false;
+  }
+}
+
+// Pianificatore automatico per avviare la generazione dalle ore 00:00 di ogni nuovo giorno
+function initMidnightDailyEditionScheduler() {
+  const scheduleMidnightTimer = () => {
+    const now = new Date();
+    // Calcola l'esatto timestamp delle prossime 00:00:10 locali
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 10, 0);
+    const msUntilMidnight = Math.max(1000, nextMidnight.getTime() - now.getTime());
+    console.log(`[Scheduler 00:00] Prossima esecuzione programmata alle 00:00 (tra ${Math.round(msUntilMidnight / 1000 / 60)} minuti - ${nextMidnight.toLocaleString("it-IT")})`);
+
+    setTimeout(async () => {
+      console.log(`[Scheduler 00:00] ⏰ Mezzanotte scattata! Avvio redazione sequenziale dell'edizione odierna...`);
+      try {
+        await generateDailyEditionSequential();
+      } catch (err: any) {
+        console.error("[Scheduler 00:00] Errore generazione mezzanotte:", err?.message || err);
+      }
+      scheduleMidnightTimer();
+    }, msUntilMidnight);
+  };
+
+  // 1. Controllo all'avvio del server (dopo 5 secondi)
+  setTimeout(async () => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const existing = loadDailyEdition(todayKey);
+    if (!existing || existing.status !== "complete") {
+      console.log(`[Scheduler Avvio] L'edizione del ${todayKey} non risulta completa in archivio. Avvio redazione sequenziale in background...`);
+      generateDailyEditionSequential().catch((err) => {
+        console.error("[Scheduler Avvio] Errore generazione iniziale:", err?.message || err);
+      });
+    } else {
+      console.log(`[Scheduler Avvio] Edizione del ${todayKey} già presente e completa in archivio (${existing.articles?.length || 0} articoli).`);
+    }
+  }, 5000);
+
+  // 2. Controllo periodico di sicurezza ogni 15 minuti (nel caso il server sia stato risvegliato dopo le 00:00)
+  setInterval(async () => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const existing = loadDailyEdition(todayKey);
+    if (!existing || existing.status !== "complete") {
+      if (!isGeneratingDailyEdition) {
+        console.log(`[Scheduler Periodico] Edizione per ${todayKey} mancante o incompleta. Avvio redazione sequenziale...`);
+        generateDailyEditionSequential().catch((err) => {
+          console.error("[Scheduler Periodico] Errore:", err?.message || err);
+        });
+      }
+    }
+  }, 15 * 60 * 1000);
+
+  // 3. Programma la mezzanotte
+  scheduleMidnightTimer();
+}
+
+// Endpoint per ottenere l'edizione odierna dal file "edizione-OGGI.json"
+app.get("/api/edition/today", (req, res) => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const edition = loadDailyEdition(todayKey);
+  if (edition) {
+    return res.json({
+      success: true,
+      edition,
+      isGenerating: isGeneratingDailyEdition,
+      progress: dailyEditionProgress
+    });
+  }
+  return res.json({
+    success: false,
+    isGenerating: isGeneratingDailyEdition,
+    progress: dailyEditionProgress,
+    message: "Edizione odierna in fase di elaborazione"
+  });
+});
+
+// Endpoint di stato per monitorare l'avanzamento della generazione sequenziale
+app.get("/api/edition/status", (req, res) => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const edition = loadDailyEdition(todayKey);
+  return res.json({
+    success: true,
+    isGenerating: isGeneratingDailyEdition,
+    progress: dailyEditionProgress,
+    hasTodayEdition: Boolean(edition && edition.status === "complete"),
+    articleCount: edition?.articles?.length || 0
+  });
+});
+
+// Endpoint invocabile anche da Cron Job esterno (es. cron-job.org / GitHub Actions alle 00:00) per svegliare Render
+app.all(["/api/editorial/cron-midnight", "/api/editorial/ping"], async (req, res) => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const edition = loadDailyEdition(todayKey);
+  const force = req.query.force === "true";
+
+  if (edition && edition.status === "complete" && !force) {
+    return res.json({
+      success: true,
+      status: "already_complete",
+      date: todayKey,
+      articles: edition.articles?.length || 0,
+      message: `Edizione per ${todayKey} già redatta e sigillata su file.`
+    });
+  }
+
+  if (isGeneratingDailyEdition) {
+    return res.json({
+      success: true,
+      status: "in_progress",
+      date: todayKey,
+      progress: dailyEditionProgress,
+      message: "Generazione sequenziale già in corso."
+    });
+  }
+
+  // Avvia elaborazione sequenziale in background
+  generateDailyEditionSequential({ force }).catch(err => {
+    console.error("Cron trigger error:", err);
+  });
+
+  return res.json({
+    success: true,
+    status: "started",
+    date: todayKey,
+    message: "Generazione sequenziale a scaglioni avviata con successo per l'edizione odierna."
+  });
+});
+
 // Endpoint di diagnostica e statistiche del Registro Storico Editoriale
 app.get("/api/editorial/ledger-stats", (req, res) => {
   res.json({
@@ -3375,6 +4059,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Personal Digest server active on http://0.0.0.0:${PORT}`);
+    initMidnightDailyEditionScheduler();
   });
 }
 
