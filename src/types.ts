@@ -23,6 +23,12 @@ export interface Article {
   sources: SourceReference[];
   originalLanguage?: string;
   isCondensedBook?: boolean;
+  isShortStory?: boolean;
+  storyWorkTitle?: string;
+  storyAuthor?: string;
+  storyYear?: string;
+  storyCulture?: string;
+  storyOriginalCollection?: string;
   imageUrl?: string;
   artworkTitle?: string;
   artworkArtist?: string;

@@ -1,4 +1,5 @@
 import { Article, InterestItem } from "../types";
+import { isShortStoryTopic, getCuratedShortStory, formatStoryAsArticle } from "../data/curatedShortStories";
 
 export interface ArticleTemplate {
   category: string;
@@ -512,6 +513,18 @@ export function generateFreshDailyArticles(
   activeInterests.forEach((interest, idx) => {
     const category = interest.category || "Attualità";
     const topic = interest.topic || "";
+
+    // Se l'interesse è Narrativa Breve, estrai un racconto classico reale di pubblico dominio
+    if (isShortStoryTopic(topic, category)) {
+      const otherInterest = activeInterests.find((i) => !isShortStoryTopic(i.topic || "", i.category || ""))?.topic || "";
+      const story = getCuratedShortStory(otherInterest, daySeed + idx, Array.from(usedTitles));
+      const art = formatStoryAsArticle(story, dateFormatted, idx);
+      if (!usedTitles.has(art.title)) {
+        usedTitles.add(art.title);
+        generatedArticles.push(art);
+      }
+      return;
+    }
 
     // Cerca nel pool di articoli per categoria
     const categoryPool = INTEREST_TOPICS_POOL[category] || [];

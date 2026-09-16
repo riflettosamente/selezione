@@ -1575,8 +1575,34 @@ export default function FlipBook({
                       );
                     })()}
 
+                    {/* Badge e Dettagli Racconto Breve Storico / Mitologico se applicabile */}
+                    {currentPage.article.isShortStory ? (
+                      <div className="mb-4 p-3 bg-amber-50/80 border border-amber-300/60 rounded-lg text-xs font-sans text-[#4A3A2F]">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-amber-200/60">
+                          <span className="font-serif-heading font-bold text-[#8A2520] tracking-wide uppercase text-[11px]">
+                            📜 Patrimonio Letterario &amp; Mitologico (Testo Integrale d'Autore)
+                          </span>
+                          {currentPage.article.storyCulture && (
+                            <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-medium text-[10px]">
+                              {currentPage.article.storyCulture}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#5A483B]">
+                          <span>Opera: <strong className="text-[#2B201A]">{currentPage.article.storyWorkTitle || currentPage.article.title}</strong></span>
+                          {currentPage.article.storyAuthor && <span>&bull; Autore: <strong>{currentPage.article.storyAuthor}</strong></span>}
+                          {currentPage.article.storyYear && <span>&bull; Epoca: <strong>{currentPage.article.storyYear}</strong></span>}
+                        </div>
+                        {currentPage.article.storyOriginalCollection && (
+                          <div className="mt-1 text-[10px] text-[#7A6658] italic">
+                            Fonte originale: {currentPage.article.storyOriginalCollection}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+
                     <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-xs font-sans text-[#786457] pb-3 border-b border-[#E3D7C5] mb-5">
-                      <span>A cura di: <strong>{currentPage.article.author}</strong></span>
+                      <span>{currentPage.article.isShortStory ? 'Autore / Traduzione:' : 'A cura di:'} <strong>{currentPage.article.author}</strong></span>
                       <span>&bull;</span>
                       <span>{currentPage.article.date}</span>
                       <span>&bull;</span>
@@ -1662,7 +1688,7 @@ export default function FlipBook({
                         </span>
                         <Globe className="w-4 h-4 text-[#8A2520]" />
                         <span className="tracking-wide uppercase font-serif-heading text-[11px] sm:text-xs">
-                          Scansione Web & Fonti Originali Accreditate ({currentPage.article.sources.length})
+                          {currentPage.article.isShortStory ? 'Edizione di Riferimento & Fonti Archivistiche' : 'Scansione Web & Fonti Originali Accreditate'} ({currentPage.article.sources.length})
                         </span>
                       </div>
                       <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
