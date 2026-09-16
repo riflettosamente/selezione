@@ -1,0 +1,16 @@
+name: Trigger Edizione Quotidiana
+
+on:
+  schedule:
+    # Esegue ogni notte alle 22:00 UTC (mezzanotte italiana / 23:00 con ora legale)
+    - cron: '0 22 * * *'
+  # Permette di testarlo a mano con un clic
+  workflow_dispatch:
+
+jobs:
+  wake-and-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sveglia Render e avvia redazione
+        run: |
+          curl -s -X POST "https://selezione.onrender.com/api/editorial/cron-midnight"
