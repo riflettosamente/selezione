@@ -1,5 +1,5 @@
 import { Article, InterestItem } from "../types";
-import { isShortStoryTopic, getCuratedShortStory, formatStoryAsArticle } from "../data/curatedShortStories";
+import { isShortStoryTopic, formatStoryAsArticle } from "./shortStoryService";
 
 export interface ArticleTemplate {
   category: string;
@@ -514,11 +514,40 @@ export function generateFreshDailyArticles(
     const category = interest.category || "Attualità";
     const topic = interest.topic || "";
 
-    // Se l'interesse è Narrativa Breve, estrai un racconto classico reale di pubblico dominio
+    // Se l'interesse è Narrativa Breve, imposta la struttura di riferimento
     if (isShortStoryTopic(topic, category)) {
-      const otherInterest = activeInterests.find((i) => !isShortStoryTopic(i.topic || "", i.category || ""))?.topic || "";
-      const story = getCuratedShortStory(otherInterest, daySeed + idx, Array.from(usedTitles));
-      const art = formatStoryAsArticle(story, dateFormatted, idx);
+      const storyTitle = "Il Manoscritto Trovato in una Bottiglia: Narrazione del Mare Ignoto";
+      const art: Article = {
+        id: `story-client-fb-${idx}-${Date.now()}`,
+        pageNumber: idx + 2,
+        category: "Cultura",
+        topicRef: "Narrativa Breve",
+        title: storyTitle,
+        shortTitle: "Narrazione del Mare Ignoto",
+        excerpt: "Una testimonianza affidata ai flutti oceanici, alle frontiere estreme dell'esplorazione e dell'abisso.",
+        content: `### L'Inizio della Tempesta\n\nDella mia patria e della mia famiglia ho poco da dire. Una vita trascorsa tra i libri e i viaggi mi aveva preparato alle traversate più ardue.\n\n### L'Abisso Glaciale\n\nNelle acque sconosciute del polo australe, la nostra nave fu catturata da una corrente impetuosa che non apparteneva a nessuna carta geografica.\n\n### Il Messaggio nella Bottiglia\n\nConsapevole dell'imminente fine, affido queste pagine al mare, perché l'umanità serbi memoria di ciò che l'occhio mortale non dovrebbe mai scorgere.`,
+        readingTime: "7 min",
+        author: "Edgar Allan Poe (1833)",
+        date: dateFormatted,
+        highlightQuote: "«Un senso di mistero che non può essere svelato avvolge queste regioni sconfinate.»",
+        originalLanguage: "Letteratura Classica",
+        isCondensedBook: false,
+        isShortStory: true,
+        storyWorkTitle: "Manoscritto trovato in una bottiglia",
+        storyAuthor: "Edgar Allan Poe",
+        storyYear: "1833",
+        storyCulture: "Letteratura Americana",
+        storyOriginalCollection: "Tales of the Grotesque and Arabesque",
+        sources: [
+          {
+            title: "Project Gutenberg: The Works of Edgar Allan Poe",
+            url: "https://www.gutenberg.org/ebooks/2147",
+            publisher: "Project Gutenberg",
+            originalLanguage: "Inglese / Traduzione Italiana",
+            keyFinding: "Edizione classica del racconto pionieristico della letteratura d'avventura e mistero."
+          }
+        ]
+      };
       if (!usedTitles.has(art.title)) {
         usedTitles.add(art.title);
         generatedArticles.push(art);

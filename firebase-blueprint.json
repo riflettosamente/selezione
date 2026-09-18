@@ -13,6 +13,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "category", "createdAt"]
+    },
+    "daily_editions": {
+      "title": "Daily Editions",
+      "description": "Daily curated editorial editions saved permanently to prevent token re-generation",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "status": { "type": "string" },
+        "articles": { "type": "array" },
+        "artwork": { "type": "object" },
+        "quote": { "type": "object" },
+        "toc": { "type": "array" },
+        "completedAt": { "type": "string" },
+        "syncedToFirestoreAt": { "type": "string" }
+      },
+      "required": ["date", "status"]
     }
   }
 }

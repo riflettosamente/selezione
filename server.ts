@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { isShortStoryTopic, formatStoryAsArticle, ShortStoryMetadata } from "./src/services/shortStoryService";
+import { saveDailyEditionToFirestore, loadDailyEditionFromFirestore } from "./src/services/firestoreStorage";
 
 dotenv.config();
 
@@ -354,11 +355,11 @@ async function callModelWithRetries(
     } catch (err: any) {
       lastErr = err;
       if (isTransientError(err) && attempt < maxRetries) {
-        const backoffMs = Math.pow(2, attempt) * 1200 + Math.random() * 600;
+        const backoffMs = Math.pow(2, attempt) * 1000 + Math.random() * 500;
         console.info(
-          `Model ${requestOptions.model} returned transient error (503/high demand). Retrying in ${Math.round(
+          `Model ${requestOptions.model} returned transient status (503/overload). Waiting ${Math.round(
             backoffMs
-          )}ms (attempt ${attempt + 1}/${maxRetries})...`
+          )}ms before retry...`
         );
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
         continue;
@@ -542,13 +543,16 @@ async function generateContentWithRetryAndFallback(
       if (isQuotaError(err)) {
         console.info(`Gemini API quota reached for model ${model} during search grounding.`);
         continue;
+      } else if (isTransientError(err)) {
+        console.info(`Model ${model} overloaded or unavailable during search grounding, switching to alternative model...`);
+        continue;
       } else {
         console.info(`Search grounding issue with model ${model}:`, err?.message || err);
       }
     }
   }
 
-  // Pass 2: Fallback sintetico senza Search Tool in caso di quota 429 su Search
+  // Pass 2: Fallback sintetico senza Search Tool in caso di quota 429 su Search o indisponibilità
   if (requestOptions.config?.tools && requestOptions.config.tools.length > 0) {
     console.info("Search Grounding unavailable or quota exhausted; falling back to direct high-accuracy Gemini knowledge synthesis...");
     const fallbackConfig = { ...requestOptions.config };
@@ -576,6 +580,9 @@ async function generateContentWithRetryAndFallback(
         lastError = err;
         if (isQuotaError(err)) {
           console.info(`Gemini API quota reached for model ${model} during direct synthesis.`);
+          continue;
+        } else if (isTransientError(err)) {
+          console.info(`Model ${model} overloaded or unavailable during direct synthesis, switching to alternative model...`);
           continue;
         } else {
           console.info(`Fallback synthesis issue with model ${model}:`, err?.message || err);
@@ -678,19 +685,37 @@ function getTodayAliasFilePath(): string {
   return path.join(EDITIONS_DIR, "edizione-OGGI.json");
 }
 
+// Cache in-memory per edizioni complete già lette da Firestore o disco
+const memoryEditionsCache = new Map<string, any>();
+
 function loadDailyEdition(dateKey?: string): any | null {
+  const key = dateKey || new Date().toISOString().slice(0, 10);
+  
+  // 1. Check in-memory cache prima di ogni cosa
+  if (memoryEditionsCache.has(key)) {
+    return memoryEditionsCache.get(key);
+  }
+
   try {
-    const key = dateKey || new Date().toISOString().slice(0, 10);
     const datedFile = getDailyEditionFilePath(key);
     if (fs.existsSync(datedFile)) {
       const content = fs.readFileSync(datedFile, "utf-8");
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (parsed) {
+        if (parsed.status === "complete") {
+          memoryEditionsCache.set(key, parsed);
+        }
+        return parsed;
+      }
     }
     const todayAlias = getTodayAliasFilePath();
     if (fs.existsSync(todayAlias)) {
       const content = fs.readFileSync(todayAlias, "utf-8");
       const parsed = JSON.parse(content);
       if (parsed && (parsed.date === key || !dateKey)) {
+        if (parsed.status === "complete") {
+          memoryEditionsCache.set(key, parsed);
+        }
         return parsed;
       }
     }
@@ -698,6 +723,43 @@ function loadDailyEdition(dateKey?: string): any | null {
     console.warn("Avviso lettura file edizione:", err);
   }
   return null;
+}
+
+/**
+ * Legge l'edizione verificando in sequenza: Cache RAM -> File locale -> Cloud Firestore.
+ * Se trovata su Firestore, la reidrata istantaneamente anche sul filesystem locale e in RAM.
+ */
+async function loadDailyEditionAsync(dateKey?: string): Promise<any | null> {
+  const key = dateKey || new Date().toISOString().slice(0, 10);
+  
+  const local = loadDailyEdition(key);
+  if (local && local.status === "complete") {
+    return local;
+  }
+
+  // Se locale mancante o incompleto (es. Render dopo lo sleep/spin-down), controlliamo Firestore
+  try {
+    const cloudEdition = await loadDailyEditionFromFirestore(key);
+    if (cloudEdition && cloudEdition.status === "complete") {
+      memoryEditionsCache.set(key, cloudEdition);
+      // Ripristina sul disco locale di Render così tutti i file helper la trovano
+      try {
+        const datedFile = getDailyEditionFilePath(key);
+        const todayAlias = getTodayAliasFilePath();
+        const jsonStr = JSON.stringify(cloudEdition, null, 2);
+        fs.writeFileSync(datedFile, jsonStr, "utf-8");
+        fs.writeFileSync(todayAlias, jsonStr, "utf-8");
+        console.log(`[Storage] ✓ Edizione ${key} ripristinata con successo da Firestore al filesystem locale.`);
+      } catch (fErr) {
+        console.warn("[Storage] Avviso scrittura cache locale da Firestore:", fErr);
+      }
+      return cloudEdition;
+    }
+  } catch (cloudErr) {
+    console.warn("[Storage] Avviso recupero edizione da Firestore:", cloudErr);
+  }
+
+  return local;
 }
 
 function saveDailyEditionProgress(editionData: any) {
@@ -709,6 +771,14 @@ function saveDailyEditionProgress(editionData: any) {
     const jsonStr = JSON.stringify(editionData, null, 2);
     fs.writeFileSync(datedFile, jsonStr, "utf-8");
     fs.writeFileSync(todayAlias, jsonStr, "utf-8");
+
+    if (editionData.status === "complete") {
+      memoryEditionsCache.set(key, editionData);
+      // Salvataggio permanente su Firestore asincrono
+      saveDailyEditionToFirestore(key, editionData).catch((fsErr) => {
+        console.error(`[Storage] Errore salvataggio automatico edizione ${key} su Firestore:`, fsErr);
+      });
+    }
   } catch (err) {
     console.error("Errore salvataggio incrementale su file edizione:", err);
   }
@@ -1394,8 +1464,8 @@ app.post("/api/articles/daily", async (req, res) => {
     const cacheKey = `daily_articles_${todayDateKey}`;
 
     if (!forceRefresh) {
-      // 1. Priorità massima: Edizione quotidiana pre-generata su file persistente (conservata per 24h)
-      const fileEdition = loadDailyEdition(todayDateKey);
+      // 1. Priorità massima: Edizione quotidiana pre-generata (Cache RAM -> File locale -> Cloud Firestore per 24h)
+      const fileEdition = await loadDailyEditionAsync(todayDateKey);
       if (fileEdition && Array.isArray(fileEdition.articles) && fileEdition.articles.length >= 8) {
         return res.json({
           success: true,
@@ -1404,7 +1474,7 @@ app.post("/api/articles/daily", async (req, res) => {
           webSearchQueries: fileEdition.webSearchQueries || [],
           matchedTopicsCount: activeInterests.length,
           count: fileEdition.articles.length,
-          mode: "daily_file_edition",
+          mode: "daily_persistent_edition",
           sourceFile: `edizione-${todayDateKey}.json`
         });
       }
@@ -1613,7 +1683,7 @@ Assicurati che ciascun articolo sia un saggio esaustivo di circa 900 parole con 
         const webSearchQueries = allWebSearchQueries;
 
         if (rawArticles.length > 0) {
-          const articles = rawArticles.map((art: any, idx: number) => {
+          const articles = await Promise.all(rawArticles.map(async (art: any, idx: number) => {
             let sources: any[] = Array.isArray(art.sources) && art.sources.length > 0 ? art.sources : [];
             
             // Arricchisci con i link reali trovati dal grounding di Google Search
@@ -1648,12 +1718,18 @@ Assicurati che ciascun articolo sia un saggio esaustivo di circa 900 parole con 
 
             if (isShortStoryTopic(topicRef, category)) {
               const otherInterest = activeInterests.find((i: any) => !isShortStoryTopic(i.topic || "", i.category || ""))?.topic || "";
-              const story = getCuratedShortStory(otherInterest, (dateFormatted ? dateFormatted.length : 42) + idx, serverStoriesHistory.map(s => s.storyWorkTitle));
+              const { story, webLinks: storyLinks } = await searchShortStoryOnline(
+                otherInterest,
+                serverStoriesHistory.map(s => s.storyWorkTitle),
+                dateFormatted || "Oggi",
+                idx
+              );
               registerStoryInServerHistory(story.storyWorkTitle, story.title);
               const formatted = formatStoryAsArticle(story, dateFormatted || "Oggi", idx);
               return {
                 ...formatted,
-                id: art.id || formatted.id
+                id: art.id || formatted.id,
+                sources: (formatted.sources && formatted.sources.length > 0) ? formatted.sources : storyLinks
               };
             }
 
@@ -1673,7 +1749,7 @@ Assicurati che ciascun articolo sia un saggio esaustivo di circa 900 parole con 
               isCondensedBook: Boolean(art.isCondensedBook),
               sources
             };
-          });
+          }));
 
           registerArticlesInServerHistory(articles);
           dailyArticlesCache.set(cacheKey, {
@@ -3394,7 +3470,7 @@ app.post("/api/art/masterpiece", async (req, res) => {
     const cacheKey = `daily_art_v9_${todayDateKey}_seed_${seed}_int_${interestsSignature.length}`;
 
     if (!forceRefresh) {
-      const fileEdition = loadDailyEdition(todayDateKey);
+      const fileEdition = await loadDailyEditionAsync(todayDateKey);
       if (fileEdition && fileEdition.masterpiece && fileEdition.masterpiece.artworkTitle) {
         return res.json({
           success: true,
@@ -3622,23 +3698,25 @@ async function generateSingleArticleAi(
   isCondensed: boolean,
   excludeTitles: string[] = []
 ): Promise<{ article: any; webLinks: any[]; webSearchQueries: string[] }> {
-  // Se l'argomento è "Narrativa Breve", estrai un racconto classico reale di pubblico dominio (senza generare testo AI)
+  // Se l'argomento è "Narrativa Breve", cerca un'opera reale online tramite scraper/API di pubblico dominio coerente con gli interessi
   if (isShortStoryTopic(interest?.topic || "", interest?.category || "")) {
-    const story = getCuratedShortStory(
-      interest?.description || interest?.topic || "",
-      (dateFormatted ? dateFormatted.length : 123) + index,
-      [...(excludeTitles || []), ...serverStoriesHistory.map(s => s.storyWorkTitle)]
+    const relatedTheme = interest?.description || interest?.topic || "";
+    const { story, webLinks, webSearchQueries } = await searchShortStoryOnline(
+      relatedTheme,
+      [...(excludeTitles || []), ...serverStoriesHistory.map(s => s.storyWorkTitle)],
+      dateFormatted,
+      index
     );
     registerStoryInServerHistory(story.storyWorkTitle, story.title);
     const storyArticle = formatStoryAsArticle(story, dateFormatted, index);
     return {
       article: storyArticle,
-      webLinks: story.sources.map(s => ({
+      webLinks: (webLinks && webLinks.length > 0) ? webLinks : (story.sources || []).map(s => ({
         title: s.title,
         url: s.url,
         publisher: s.publisher
       })),
-      webSearchQueries: [story.storyWorkTitle, story.storyAuthor]
+      webSearchQueries: (webSearchQueries && webSearchQueries.length > 0) ? webSearchQueries : [story.storyWorkTitle, story.storyAuthor].filter(Boolean)
     };
   }
 
@@ -3778,9 +3856,9 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
     return loadDailyEdition(dateKey);
   }
 
-  const existing = loadDailyEdition(dateKey);
+  const existing = await loadDailyEditionAsync(dateKey);
   if (existing && existing.status === "complete" && !options?.force) {
-    console.log(`[Generazione Sequenziale] Edizione per ${dateKey} già presente e completa su file.`);
+    console.log(`[Generazione Sequenziale] Edizione per ${dateKey} già presente e completa (ripristinata da Firestore/cache). Salto generazione.`);
     return existing;
   }
 
@@ -3836,7 +3914,7 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
           const response = await generateContentWithRetryAndFallback(ai, {
             contents: [{ role: "user", parts: [{ text: artPrompt }] }],
             config: { tools: [{ googleSearch: {} }], temperature: 0.4 }
-          }, "gemini-3.6-flash");
+          }, "gemini-3.1-flash-lite");
 
           const parsed = safeExtractJson(response.text || "{}");
           if (parsed?.artworkTitle && parsed?.artist && parsed?.article) {
@@ -4079,21 +4157,21 @@ function initMidnightDailyEditionScheduler() {
   // 1. Controllo all'avvio del server (dopo 5 secondi)
   setTimeout(async () => {
     const todayKey = new Date().toISOString().slice(0, 10);
-    const existing = loadDailyEdition(todayKey);
+    const existing = await loadDailyEditionAsync(todayKey);
     if (!existing || existing.status !== "complete") {
-      console.log(`[Scheduler Avvio] L'edizione del ${todayKey} non risulta completa in archivio. Avvio redazione sequenziale in background...`);
+      console.log(`[Scheduler Avvio] L'edizione del ${todayKey} non risulta in archivio locale né su Firestore. Avvio redazione sequenziale in background...`);
       generateDailyEditionSequential().catch((err) => {
         console.error("[Scheduler Avvio] Errore generazione iniziale:", err?.message || err);
       });
     } else {
-      console.log(`[Scheduler Avvio] Edizione del ${todayKey} già presente e completa in archivio (${existing.articles?.length || 0} articoli).`);
+      console.log(`[Scheduler Avvio] Edizione del ${todayKey} già presente e completa in archivio (${existing.articles?.length || 0} articoli, Firestore sincronizzato).`);
     }
   }, 5000);
 
   // 2. Controllo periodico di sicurezza ogni 15 minuti (nel caso il server sia stato risvegliato dopo le 00:00)
   setInterval(async () => {
     const todayKey = new Date().toISOString().slice(0, 10);
-    const existing = loadDailyEdition(todayKey);
+    const existing = await loadDailyEditionAsync(todayKey);
     if (!existing || existing.status !== "complete") {
       if (!isGeneratingDailyEdition) {
         console.log(`[Scheduler Periodico] Edizione per ${todayKey} mancante o incompleta. Avvio redazione sequenziale...`);
@@ -4108,10 +4186,10 @@ function initMidnightDailyEditionScheduler() {
   scheduleMidnightTimer();
 }
 
-// Endpoint per ottenere l'edizione odierna dal file "edizione-OGGI.json"
-app.get("/api/edition/today", (req, res) => {
+// Endpoint per ottenere l'edizione odierna dal file o Firestore
+app.get("/api/edition/today", async (req, res) => {
   const todayKey = new Date().toISOString().slice(0, 10);
-  const edition = loadDailyEdition(todayKey);
+  const edition = await loadDailyEditionAsync(todayKey);
   if (edition) {
     return res.json({
       success: true,
@@ -4129,9 +4207,9 @@ app.get("/api/edition/today", (req, res) => {
 });
 
 // Endpoint di stato per monitorare l'avanzamento della generazione sequenziale
-app.get("/api/edition/status", (req, res) => {
+app.get("/api/edition/status", async (req, res) => {
   const todayKey = new Date().toISOString().slice(0, 10);
-  const edition = loadDailyEdition(todayKey);
+  const edition = await loadDailyEditionAsync(todayKey);
   return res.json({
     success: true,
     isGenerating: isGeneratingDailyEdition,
@@ -4144,7 +4222,7 @@ app.get("/api/edition/status", (req, res) => {
 // Endpoint invocabile anche da Cron Job esterno (es. cron-job.org / GitHub Actions alle 00:00) per svegliare Render
 app.all(["/api/editorial/cron-midnight", "/api/editorial/ping"], async (req, res) => {
   const todayKey = new Date().toISOString().slice(0, 10);
-  const edition = loadDailyEdition(todayKey);
+  const edition = await loadDailyEditionAsync(todayKey);
   const force = req.query.force === "true";
 
   if (edition && edition.status === "complete" && !force) {
@@ -4153,7 +4231,7 @@ app.all(["/api/editorial/cron-midnight", "/api/editorial/ping"], async (req, res
       status: "already_complete",
       date: todayKey,
       articles: edition.articles?.length || 0,
-      message: `Edizione per ${todayKey} già redatta e sigillata su file.`
+      message: `Edizione per ${todayKey} già redatta e sigillata (salvata su Firestore e locale).`
     });
   }
 
@@ -4263,6 +4341,44 @@ app.post("/api/ai/test", async (req, res) => {
       success: false,
       error: err?.message || "Errore durante il test di generazione AI",
       latencyMs: Date.now() - startTime
+    });
+  }
+});
+
+// Endpoint di test e verifica dello stato Firestore dell'edizione giornaliera
+app.all("/api/edition/firestore-test", async (req, res) => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  try {
+    // 1. Legge dal disco locale o genera un backup istantaneo se presente
+    const localEdition = loadDailyEdition(todayKey);
+    let firestoreEdition = await loadDailyEditionFromFirestore(todayKey);
+
+    // Se esiste localmente ma non su Firestore, la sincronizziamo subito per test
+    let syncAttempted = false;
+    if (localEdition && !firestoreEdition) {
+      syncAttempted = true;
+      await saveDailyEditionToFirestore(todayKey, localEdition);
+      firestoreEdition = await loadDailyEditionFromFirestore(todayKey);
+    }
+
+    return res.json({
+      success: true,
+      todayKey,
+      hasLocalFile: Boolean(localEdition),
+      hasFirestoreDoc: Boolean(firestoreEdition),
+      syncAttempted,
+      articlesInFirestore: firestoreEdition?.articles?.length || 0,
+      artworkInFirestore: Boolean(firestoreEdition?.masterpiece?.artworkTitle || firestoreEdition?.artwork?.artworkTitle),
+      syncedAt: firestoreEdition?.syncedToFirestoreAt || firestoreEdition?.updatedAt || null,
+      message: firestoreEdition
+        ? `L'edizione del ${todayKey} è memorizzata e protetta su Google Cloud Firestore (${firestoreEdition?.articles?.length || 0} articoli salvati)!`
+        : `Nessuna edizione ancora presente su Firestore per ${todayKey}. Verrà salvata al prossimo completamento.`
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      todayKey,
+      error: err?.message || String(err)
     });
   }
 });
