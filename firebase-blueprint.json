@@ -16,16 +16,21 @@
     },
     "daily_editions": {
       "title": "Daily Editions",
-      "description": "Daily curated editorial editions saved permanently to prevent token re-generation",
+      "description": "Daily curated editorial editions saved step-by-step for 24h retention",
       "type": "object",
       "properties": {
         "date": { "type": "string" },
         "status": { "type": "string" },
+        "step": { "type": "string" },
+        "currentStep": { "type": "number" },
+        "totalSteps": { "type": "number" },
         "articles": { "type": "array" },
-        "artwork": { "type": "object" },
+        "masterpiece": { "type": "object" },
+        "book": { "type": "object" },
+        "word": { "type": "object" },
         "quote": { "type": "object" },
-        "toc": { "type": "array" },
         "completedAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
         "syncedToFirestoreAt": { "type": "string" }
       },
       "required": ["date", "status"]

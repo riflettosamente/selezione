@@ -402,14 +402,23 @@ export default function App() {
           setSearchStatus("quota_limited");
         } else if (data && Array.isArray(data.articles) && data.articles.length > 0) {
           setLiveWebArticles(data.articles);
-          try {
-            localStorage.setItem(todayArticlesKey, JSON.stringify(data.articles));
-          } catch {}
+          if (!data.inProgress) {
+            try {
+              localStorage.setItem(todayArticlesKey, JSON.stringify(data.articles));
+            } catch {}
+          } else {
+            // Se la redazione a step di 60-62s è in corso su Firestore, ricontrolla tra 62s per caricare il nuovo articolo appena salvato
+            setTimeout(() => {
+              fetchLiveDailyArticles();
+            }, 62000);
+          }
           if (Array.isArray(data.webSearchQueries)) {
             setGroundingQueries(data.webSearchQueries);
-            try {
-              localStorage.setItem(todayQueriesKey, JSON.stringify(data.webSearchQueries));
-            } catch {}
+            if (!data.inProgress) {
+              try {
+                localStorage.setItem(todayQueriesKey, JSON.stringify(data.webSearchQueries));
+              } catch {}
+            }
           }
           setSearchStatus("success");
         } else {

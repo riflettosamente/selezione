@@ -5,7 +5,12 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { isShortStoryTopic, formatStoryAsArticle, ShortStoryMetadata } from "./src/services/shortStoryService";
-import { saveDailyEditionToFirestore, loadDailyEditionFromFirestore } from "./src/services/firestoreStorage";
+import { 
+  saveDailyEditionToFirestore, 
+  loadDailyEditionFromFirestore, 
+  deleteDailyEditionFromFirestore,
+  cleanupExpiredFirestoreEditions 
+} from "./src/services/firestoreStorage";
 
 dotenv.config();
 
@@ -688,6 +693,43 @@ function getTodayAliasFilePath(): string {
 // Cache in-memory per edizioni complete già lette da Firestore o disco
 const memoryEditionsCache = new Map<string, any>();
 
+/**
+ * Pulisce i file locali e la cache in RAM più vecchi di 24 ore.
+ * Mantiene ESCLUSIVAMENTE l'edizione corrente del giorno.
+ */
+function cleanupExpiredLocalEditions(currentDateKey?: string) {
+  const keepDate = currentDateKey || new Date().toISOString().slice(0, 10);
+  try {
+    // 1. Pulisce la cache RAM
+    for (const key of memoryEditionsCache.keys()) {
+      if (key !== keepDate) {
+        memoryEditionsCache.delete(key);
+      }
+    }
+
+    // 2. Pulisce i file JSON su disco
+    if (fs.existsSync(EDITIONS_DIR)) {
+      const files = fs.readdirSync(EDITIONS_DIR);
+      for (const file of files) {
+        // es. edizione-2026-09-17.json
+        if (file.startsWith("edizione-") && file.endsWith(".json") && file !== "edizione-OGGI.json") {
+          const fileDate = file.replace("edizione-", "").replace(".json", "");
+          if (fileDate !== keepDate) {
+            try {
+              fs.unlinkSync(path.join(EDITIONS_DIR, file));
+              console.log(`[Storage Locale Pulizia 24h] 🗑️ Rimosso file locale scaduto: ${file}`);
+            } catch (uErr) {
+              console.warn(`[Storage Locale Pulizia] Errore rimozione ${file}:`, uErr);
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Storage Locale Pulizia] Errore generale pulizia locale:", err);
+  }
+}
+
 function loadDailyEdition(dateKey?: string): any | null {
   const key = dateKey || new Date().toISOString().slice(0, 10);
   
@@ -727,7 +769,7 @@ function loadDailyEdition(dateKey?: string): any | null {
 
 /**
  * Legge l'edizione verificando in sequenza: Cache RAM -> File locale -> Cloud Firestore.
- * Se trovata su Firestore, la reidrata istantaneamente anche sul filesystem locale e in RAM.
+ * Se trovata su Firestore (completa o parziale), la reidrata istantaneamente sul filesystem locale.
  */
 async function loadDailyEditionAsync(dateKey?: string): Promise<any | null> {
   const key = dateKey || new Date().toISOString().slice(0, 10);
@@ -737,23 +779,30 @@ async function loadDailyEditionAsync(dateKey?: string): Promise<any | null> {
     return local;
   }
 
-  // Se locale mancante o incompleto (es. Render dopo lo sleep/spin-down), controlliamo Firestore
+  // Se locale mancante o incompleto (es. Render dopo lo sleep/spin-down o durante gli step), controlliamo Firestore
   try {
     const cloudEdition = await loadDailyEditionFromFirestore(key);
-    if (cloudEdition && cloudEdition.status === "complete") {
-      memoryEditionsCache.set(key, cloudEdition);
-      // Ripristina sul disco locale di Render così tutti i file helper la trovano
-      try {
-        const datedFile = getDailyEditionFilePath(key);
-        const todayAlias = getTodayAliasFilePath();
-        const jsonStr = JSON.stringify(cloudEdition, null, 2);
-        fs.writeFileSync(datedFile, jsonStr, "utf-8");
-        fs.writeFileSync(todayAlias, jsonStr, "utf-8");
-        console.log(`[Storage] ✓ Edizione ${key} ripristinata con successo da Firestore al filesystem locale.`);
-      } catch (fErr) {
-        console.warn("[Storage] Avviso scrittura cache locale da Firestore:", fErr);
+    if (cloudEdition) {
+      if (cloudEdition.status === "complete") {
+        memoryEditionsCache.set(key, cloudEdition);
       }
-      return cloudEdition;
+      const cloudArticlesCount = Array.isArray(cloudEdition.articles) ? cloudEdition.articles.filter(Boolean).length : 0;
+      const localArticlesCount = Array.isArray(local?.articles) ? local.articles.filter(Boolean).length : 0;
+
+      // Ripristina sul disco locale se il file locale non esiste o se Firestore ha uno step più avanzato
+      if (!local || cloudEdition.status === "complete" || cloudArticlesCount >= localArticlesCount) {
+        try {
+          const datedFile = getDailyEditionFilePath(key);
+          const todayAlias = getTodayAliasFilePath();
+          const jsonStr = JSON.stringify(cloudEdition, null, 2);
+          fs.writeFileSync(datedFile, jsonStr, "utf-8");
+          fs.writeFileSync(todayAlias, jsonStr, "utf-8");
+          console.log(`[Storage] ✓ Edizione ${key} (${cloudEdition.status || "in_progress"}, ${cloudArticlesCount} articoli) sincronizzata da Firestore al filesystem locale.`);
+        } catch (fErr) {
+          console.warn("[Storage] Avviso scrittura cache locale da Firestore:", fErr);
+        }
+        return cloudEdition;
+      }
     }
   } catch (cloudErr) {
     console.warn("[Storage] Avviso recupero edizione da Firestore:", cloudErr);
@@ -762,25 +811,31 @@ async function loadDailyEditionAsync(dateKey?: string): Promise<any | null> {
   return local;
 }
 
-function saveDailyEditionProgress(editionData: any) {
+/**
+ * Salva l'avanzamento dell'edizione SIA su file locale SIA su Cloud Firestore ad ogni singolo passo.
+ */
+async function saveDailyEditionProgress(editionData: any): Promise<boolean> {
   try {
     const key = editionData.date || new Date().toISOString().slice(0, 10);
     const datedFile = getDailyEditionFilePath(key);
     const todayAlias = getTodayAliasFilePath();
     editionData.updatedAt = new Date().toISOString();
+    editionData.currentStep = dailyEditionProgress.currentStep;
+    editionData.totalSteps = dailyEditionProgress.totalSteps;
     const jsonStr = JSON.stringify(editionData, null, 2);
     fs.writeFileSync(datedFile, jsonStr, "utf-8");
     fs.writeFileSync(todayAlias, jsonStr, "utf-8");
 
     if (editionData.status === "complete") {
       memoryEditionsCache.set(key, editionData);
-      // Salvataggio permanente su Firestore asincrono
-      saveDailyEditionToFirestore(key, editionData).catch((fsErr) => {
-        console.error(`[Storage] Errore salvataggio automatico edizione ${key} su Firestore:`, fsErr);
-      });
     }
+
+    // Salvataggio immediato su Firestore ad ogni singolo step
+    const saved = await saveDailyEditionToFirestore(key, editionData);
+    return saved;
   } catch (err) {
-    console.error("Errore salvataggio incrementale su file edizione:", err);
+    console.error("Errore salvataggio incrementale su file/Firestore edizione:", err);
+    return false;
   }
 }
 
@@ -1466,16 +1521,61 @@ app.post("/api/articles/daily", async (req, res) => {
     if (!forceRefresh) {
       // 1. Priorità massima: Edizione quotidiana pre-generata (Cache RAM -> File locale -> Cloud Firestore per 24h)
       const fileEdition = await loadDailyEditionAsync(todayDateKey);
-      if (fileEdition && Array.isArray(fileEdition.articles) && fileEdition.articles.length >= 8) {
+      if (fileEdition && Array.isArray(fileEdition.articles)) {
+        const readyArticles = fileEdition.articles.filter(Boolean);
+        if (fileEdition.status === "complete" || readyArticles.length >= 8) {
+          return res.json({
+            success: true,
+            articles: readyArticles,
+            groundingSources: fileEdition.groundingSources || [],
+            webSearchQueries: fileEdition.webSearchQueries || [],
+            matchedTopicsCount: activeInterests.length,
+            count: readyArticles.length,
+            mode: "daily_persistent_edition",
+            sourceFile: `edizione-${todayDateKey}.json`
+          });
+        }
+
+        // Se la generazione sequenziale a step di 60-62s è in corso, evitiamo chiamate parallele che bloccherebbero il TPM di Groq:
+        // restituiamo gli articoli già salvati su Firestore + copertura temporanea per quelli ancora in coda
+        if (isGeneratingDailyEdition || readyArticles.length > 0) {
+          if (!isGeneratingDailyEdition) {
+            generateDailyEditionSequential().catch(() => {});
+          }
+          const tempFallback = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+          const mergedArticles = tempFallback.map((fbArt: any, idx: number) => {
+            return (fileEdition.articles && fileEdition.articles[idx] && fileEdition.articles[idx].title)
+              ? fileEdition.articles[idx]
+              : fbArt;
+          });
+          return res.json({
+            success: true,
+            inProgress: true,
+            progress: dailyEditionProgress,
+            articles: mergedArticles,
+            groundingSources: fileEdition.groundingSources || [],
+            webSearchQueries: fileEdition.webSearchQueries || [],
+            matchedTopicsCount: activeInterests.length,
+            count: mergedArticles.length,
+            mode: "sequential_step_in_progress",
+            sourceFile: `edizione-${todayDateKey}.json`
+          });
+        }
+      }
+
+      // Se non esiste ancora alcuna edizione per oggi e il job sequenziale è attivo o da avviare, avvialo senza intasare il TPM
+      if (isGeneratingDailyEdition) {
+        const tempFallback = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
         return res.json({
           success: true,
-          articles: fileEdition.articles,
-          groundingSources: fileEdition.groundingSources || [],
-          webSearchQueries: fileEdition.webSearchQueries || [],
+          inProgress: true,
+          progress: dailyEditionProgress,
+          articles: tempFallback,
+          groundingSources: [],
+          webSearchQueries: [],
           matchedTopicsCount: activeInterests.length,
-          count: fileEdition.articles.length,
-          mode: "daily_persistent_edition",
-          sourceFile: `edizione-${todayDateKey}.json`
+          count: tempFallback.length,
+          mode: "sequential_step_in_progress"
         });
       }
 
@@ -2000,7 +2100,7 @@ app.post("/api/book/recommended", async (req, res) => {
     const cacheKey = `daily_book_${todayDateKey}`;
 
     if (!forceRefresh) {
-      const fileEdition = loadDailyEdition(todayDateKey);
+      const fileEdition = await loadDailyEditionAsync(todayDateKey);
       if (fileEdition && fileEdition.book && fileEdition.book.title) {
         return res.json({
           success: true,
@@ -2358,7 +2458,7 @@ app.post("/api/word/daily", async (req, res) => {
     const cacheKey = `daily_word_${todayDateKey}`;
 
     if (!forceRefresh) {
-      const fileEdition = loadDailyEdition(todayDateKey);
+      const fileEdition = await loadDailyEditionAsync(todayDateKey);
       if (fileEdition && fileEdition.word && fileEdition.word.word) {
         return res.json({
           success: true,
@@ -2589,7 +2689,7 @@ app.post(["/api/quote/daily", "/api/anecdote/daily"], async (req, res) => {
     const cacheKey = `daily_quote_${todayDateKey}`;
 
     if (!forceRefresh) {
-      const fileEdition = loadDailyEdition(todayDateKey);
+      const fileEdition = await loadDailyEditionAsync(todayDateKey);
       if (fileEdition && fileEdition.quote && fileEdition.quote.quote) {
         return res.json({
           success: true,
@@ -3876,11 +3976,14 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
   const seed = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
   const activeInterests = DEFAULT_EDITORIAL_INTERESTS;
 
+  // Intervallo di 61 secondi (60-62s) tra uno step e l'altro per azzerare il contatore TPM (Tokens Per Minute) di Groq
+  const STEP_COOLDOWN_MS = 61000;
+
   const edition: any = existing && existing.date === dateKey ? existing : {
     date: dateKey,
     dateFormatted,
     status: "in_progress",
-    step: "Avvio redazione sequenziale a scaglioni",
+    step: "Avvio redazione sequenziale a step di 60-62 secondi",
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     articles: [],
@@ -3892,13 +3995,13 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
     webSearchQueries: []
   };
 
-  // Salvataggio iniziale su disco
-  saveDailyEditionProgress(edition);
+  // Salvataggio iniziale su disco e su Firestore
+  await saveDailyEditionProgress(edition);
 
   try {
     // --- 1. CAPOLAVORO D'ARTE ---
     dailyEditionProgress.currentStep = 1;
-    dailyEditionProgress.step = "Ricerca e analisi del Capolavoro d'Arte";
+    dailyEditionProgress.step = "Step 1/13: Ricerca e analisi del Capolavoro d'Arte";
     dailyEditionProgress.percent = Math.round((1 / 13) * 100);
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
@@ -3940,13 +4043,14 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       }
 
       edition.masterpiece = mp;
+      edition.step = `Step 1/13 completato: Capolavoro d'Arte (${mp.artworkTitle})`;
       registerMasterpieceInServerHistory(mp.artworkTitle, mp.artist);
-      saveDailyEditionProgress(edition);
-      console.log(`[Generazione Sequenziale 1/13] ✓ Capolavoro d'Arte salvato su file: "${mp.artworkTitle}"`);
-      await sleep(3000);
+      await saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 1/13] ✓ Capolavoro d'Arte salvato su file e Firestore: "${mp.artworkTitle}". Attesa 61s per azzeramento TPM...`);
+      await sleep(STEP_COOLDOWN_MS);
     }
 
-    // --- 2..10. ARTICOLI SEQUENZIALI (UNO ALLA VOLTA CON PAUSA) ---
+    // --- 2..10. ARTICOLI SEQUENZIALI (UNO ALLA VOLTA CON PAUSA DI 61 SECONDI E SALVATAGGIO FIRESTORE) ---
     const targetArticles = activeInterests.slice(0, 9); // 8 sommario + 1 libro condensato
     if (!Array.isArray(edition.articles)) {
       edition.articles = [];
@@ -3958,18 +4062,18 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       const isCondensed = i === targetArticles.length - 1;
 
       dailyEditionProgress.currentStep = stepIndex;
-      dailyEditionProgress.step = `Redazione articolo ${i + 1} di ${targetArticles.length}: "${interest.topic}"`;
+      dailyEditionProgress.step = `Step ${stepIndex}/13: Redazione articolo ${i + 1} di ${targetArticles.length} ("${interest.topic}")`;
       dailyEditionProgress.percent = Math.round((stepIndex / 13) * 100);
       dailyEditionProgress.updatedAt = new Date().toISOString();
 
       if (edition.articles[i] && edition.articles[i].title && !options?.force) {
-        console.log(`[Generazione Sequenziale ${stepIndex}/13] Articolo ${i + 1} già presente in archivio: "${edition.articles[i].title}". Salto.`);
+        console.log(`[Generazione Sequenziale ${stepIndex}/13] Articolo ${i + 1} già presente su Firestore/archivio: "${edition.articles[i].title}". Salto.`);
         continue;
       }
 
       console.log(`[Generazione Sequenziale ${stepIndex}/13] Redazione articolo ${i + 1}/${targetArticles.length}: "${interest.topic}" (${interest.category})...`);
 
-      const currentTitles = edition.articles.map((a: any) => a.title).filter(Boolean);
+      const currentTitles = edition.articles.map((a: any) => a?.title).filter(Boolean);
       const resArt = await generateSingleArticleAi(interest, i, targetArticles.length, dateFormatted, isCondensed, currentTitles);
 
       edition.articles[i] = resArt.article;
@@ -3981,17 +4085,17 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       }
 
       registerArticlesInServerHistory([resArt.article]);
-      edition.step = `Articolo ${i + 1} completato: ${resArt.article.title}`;
-      saveDailyEditionProgress(edition);
-      console.log(`[Generazione Sequenziale ${stepIndex}/13] ✓ Articolo ${i + 1} salvato su file: "${resArt.article.title}"`);
+      edition.step = `Step ${stepIndex}/13 completato: Articolo ${i + 1} (${resArt.article.title})`;
+      await saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale ${stepIndex}/13] ✓ Articolo ${i + 1} salvato su file e Firestore: "${resArt.article.title}". Attesa 61s per azzeramento TPM...`);
 
-      // Pausa di 3 secondi per azzerare contatore token ed evitare overflow
-      await sleep(3000);
+      // Pausa di 61 secondi (60-62s) per azzerare il contatore TPM di Groq prima del prossimo step
+      await sleep(STEP_COOLDOWN_MS);
     }
 
     // --- 11. LIBRO CONSIGLIATO ---
     dailyEditionProgress.currentStep = 11;
-    dailyEditionProgress.step = "Redazione Libro Consigliato del Giorno";
+    dailyEditionProgress.step = "Step 11/13: Redazione Libro Consigliato del Giorno";
     dailyEditionProgress.percent = Math.round((11 / 13) * 100);
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
@@ -4023,15 +4127,16 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       }
 
       edition.book = bk;
+      edition.step = `Step 11/13 completato: Libro Consigliato (${bk.title})`;
       registerBookInServerHistory(bk.title, bk.author);
-      saveDailyEditionProgress(edition);
-      console.log(`[Generazione Sequenziale 11/13] ✓ Libro Consigliato salvato su file: "${bk.title}"`);
-      await sleep(2500);
+      await saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 11/13] ✓ Libro Consigliato salvato su file e Firestore: "${bk.title}". Attesa 61s per azzeramento TPM...`);
+      await sleep(STEP_COOLDOWN_MS);
     }
 
     // --- 12. PAROLA DEL GIORNO ---
     dailyEditionProgress.currentStep = 12;
-    dailyEditionProgress.step = "Redazione Parola del Giorno (Più parole, più idee)";
+    dailyEditionProgress.step = "Step 12/13: Redazione Parola del Giorno (Più parole, più idee)";
     dailyEditionProgress.percent = Math.round((12 / 13) * 100);
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
@@ -4063,15 +4168,16 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       }
 
       edition.word = wd;
+      edition.step = `Step 12/13 completato: Parola del Giorno (${wd.word})`;
       registerWordInServerHistory(wd.word);
-      saveDailyEditionProgress(edition);
-      console.log(`[Generazione Sequenziale 12/13] ✓ Parola del Giorno salvata su file: "${wd.word}"`);
-      await sleep(2500);
+      await saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 12/13] ✓ Parola del Giorno salvata su file e Firestore: "${wd.word}". Attesa 61s per azzeramento TPM...`);
+      await sleep(STEP_COOLDOWN_MS);
     }
 
     // --- 13. MASSIMA DEL GIORNO CON ANEDDOTO ---
     dailyEditionProgress.currentStep = 13;
-    dailyEditionProgress.step = "Redazione Massima del Giorno con Aneddoto Storico";
+    dailyEditionProgress.step = "Step 13/13: Redazione Massima del Giorno con Aneddoto Storico";
     dailyEditionProgress.percent = 100;
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
@@ -4104,20 +4210,20 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
 
       edition.quote = qt;
       registerQuoteInServerHistory(qt.quote, qt.author, qt.anecdoteTitle);
-      console.log(`[Generazione Sequenziale 13/13] ✓ Massima del Giorno salvata su file: "${qt.quote?.slice(0, 30)}..."`);
+      console.log(`[Generazione Sequenziale 13/13] ✓ Massima del Giorno redatta: "${qt.quote?.slice(0, 30)}..."`);
     }
 
-    // SIGILLO FINALE DELL'EDIZIONE QUOTIDIANA (CONSERVATA PER 24 ORE)
+    // SIGILLO FINALE DELL'EDIZIONE QUOTIDIANA (CONSERVATA PER 24 ORE SU FIRESTORE E DISCO)
     edition.status = "complete";
     edition.completedAt = new Date().toISOString();
     edition.step = "Edizione completa e sigillata per 24 ore";
-    saveDailyEditionProgress(edition);
+    await saveDailyEditionProgress(edition);
 
     dailyEditionProgress.isGenerating = false;
     dailyEditionProgress.step = "Edizione completata con successo";
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
-    console.log(`🎉 [Generazione Sequenziale Completata] Edizione per ${dateKey} interamente redatta e salvata su:`);
+    console.log(`🎉 [Generazione Sequenziale Completata] Edizione per ${dateKey} interamente redatta e salvata ad ogni passo su Firestore e su:`);
     console.log(`   - ${getDailyEditionFilePath(dateKey)}`);
     console.log(`   - ${getTodayAliasFilePath()}`);
 
@@ -4126,7 +4232,7 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
     console.error("[Generazione Sequenziale] Errore imprevisto:", err);
     edition.status = "partial_error";
     edition.step = `Interrotto: ${err?.message || err}`;
-    saveDailyEditionProgress(edition);
+    await saveDailyEditionProgress(edition);
     return edition;
   } finally {
     isGeneratingDailyEdition = false;
@@ -4144,7 +4250,17 @@ function initMidnightDailyEditionScheduler() {
     console.log(`[Scheduler 00:00] Prossima esecuzione programmata alle 00:00 (tra ${Math.round(msUntilMidnight / 1000 / 60)} minuti - ${nextMidnight.toLocaleString("it-IT")})`);
 
     setTimeout(async () => {
-      console.log(`[Scheduler 00:00] ⏰ Mezzanotte scattata! Avvio redazione sequenziale dell'edizione odierna...`);
+      console.log(`[Scheduler 00:00] ⏰ Mezzanotte scattata! Eseguo pulizia delle edizioni scadute (> 24h)...`);
+      const newTodayKey = new Date().toISOString().slice(0, 10);
+      try {
+        // Elimina da Firestore e dal disco locale tutti gli articoli e le edizioni dei giorni precedenti
+        cleanupExpiredLocalEditions(newTodayKey);
+        await cleanupExpiredFirestoreEditions(newTodayKey);
+      } catch (cleanErr) {
+        console.warn("[Scheduler 00:00] Avviso pulizia edizioni scadute:", cleanErr);
+      }
+
+      console.log(`[Scheduler 00:00] Avvio redazione sequenziale dell'edizione odierna ${newTodayKey}...`);
       try {
         await generateDailyEditionSequential();
       } catch (err: any) {
@@ -4157,6 +4273,10 @@ function initMidnightDailyEditionScheduler() {
   // 1. Controllo all'avvio del server (dopo 5 secondi)
   setTimeout(async () => {
     const todayKey = new Date().toISOString().slice(0, 10);
+    // Pulizia immediata di edizioni residue più vecchie di 24 ore
+    cleanupExpiredLocalEditions(todayKey);
+    cleanupExpiredFirestoreEditions(todayKey).catch(() => {});
+
     const existing = await loadDailyEditionAsync(todayKey);
     if (!existing || existing.status !== "complete") {
       console.log(`[Scheduler Avvio] L'edizione del ${todayKey} non risulta in archivio locale né su Firestore. Avvio redazione sequenziale in background...`);
@@ -4171,6 +4291,9 @@ function initMidnightDailyEditionScheduler() {
   // 2. Controllo periodico di sicurezza ogni 15 minuti (nel caso il server sia stato risvegliato dopo le 00:00)
   setInterval(async () => {
     const todayKey = new Date().toISOString().slice(0, 10);
+    cleanupExpiredLocalEditions(todayKey);
+    cleanupExpiredFirestoreEditions(todayKey).catch(() => {});
+
     const existing = await loadDailyEditionAsync(todayKey);
     if (!existing || existing.status !== "complete") {
       if (!isGeneratingDailyEdition) {
@@ -4361,23 +4484,58 @@ app.all("/api/edition/firestore-test", async (req, res) => {
       firestoreEdition = await loadDailyEditionFromFirestore(todayKey);
     }
 
+    // Esegui pulizia automatica 24h per mantenere solo l'edizione odierna
+    const cleanupStats = await cleanupExpiredFirestoreEditions(todayKey);
+    cleanupExpiredLocalEditions(todayKey);
+
     return res.json({
       success: true,
       todayKey,
+      retentionPolicy: "24 ore (solo edizione odierna, cancellazione automatica edizioni precedenti)",
+      stepIntervalPolicy: "61 secondi (60-62s) tra uno step e l'altro con salvataggio immediato su Firestore ad ogni passo",
       hasLocalFile: Boolean(localEdition),
       hasFirestoreDoc: Boolean(firestoreEdition),
+      editionStatus: firestoreEdition?.status || localEdition?.status || "not_started",
+      currentStep: firestoreEdition?.currentStep || dailyEditionProgress.currentStep || 0,
+      totalSteps: firestoreEdition?.totalSteps || dailyEditionProgress.totalSteps || 13,
+      currentStepLabel: firestoreEdition?.step || dailyEditionProgress.step || null,
       syncAttempted,
-      articlesInFirestore: firestoreEdition?.articles?.length || 0,
+      expiredEditionsDeleted: cleanupStats.deletedCount,
+      articlesInFirestore: firestoreEdition?.articles?.filter(Boolean).length || 0,
       artworkInFirestore: Boolean(firestoreEdition?.masterpiece?.artworkTitle || firestoreEdition?.artwork?.artworkTitle),
+      bookInFirestore: Boolean(firestoreEdition?.book?.title),
+      wordInFirestore: Boolean(firestoreEdition?.word?.word),
+      quoteInFirestore: Boolean(firestoreEdition?.quote?.quote),
       syncedAt: firestoreEdition?.syncedToFirestoreAt || firestoreEdition?.updatedAt || null,
       message: firestoreEdition
-        ? `L'edizione del ${todayKey} è memorizzata e protetta su Google Cloud Firestore (${firestoreEdition?.articles?.length || 0} articoli salvati)!`
-        : `Nessuna edizione ancora presente su Firestore per ${todayKey}. Verrà salvata al prossimo completamento.`
+        ? `L'edizione del ${todayKey} è memorizzata su Google Cloud Firestore [stato: ${firestoreEdition.status || "in_progress"}, step ${firestoreEdition.currentStep || 0}/13, ${firestoreEdition?.articles?.filter(Boolean).length || 0} articoli]. Tutte le edizioni precedenti sono state rimosse.`
+        : `Nessuna edizione ancora presente su Firestore per ${todayKey}. Verrà salvata passo-passo (ogni 61s) e conservata per 24 ore.`
     });
   } catch (err: any) {
     return res.status(500).json({
       success: false,
       todayKey,
+      error: err?.message || String(err)
+    });
+  }
+});
+
+// Endpoint per forzare la pulizia delle edizioni scadute (> 24 ore)
+app.all("/api/edition/cleanup", async (req, res) => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  try {
+    cleanupExpiredLocalEditions(todayKey);
+    const firestoreResult = await cleanupExpiredFirestoreEditions(todayKey);
+    return res.json({
+      success: true,
+      todayKey,
+      keptEditionDate: firestoreResult.keptDate,
+      firestoreEditionsDeleted: firestoreResult.deletedCount,
+      message: `Pulizia 24h completata: mantenuta esclusivamente l'edizione ${firestoreResult.keptDate}.`
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
       error: err?.message || String(err)
     });
   }
