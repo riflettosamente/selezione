@@ -32,6 +32,7 @@ import {
   Cpu
 } from "lucide-react";
 import { AiEngineModal } from "./AiEngineModal";
+import { ArticleStatusMarker } from "./ArticleStatusMarker";
 
 // Helper per pulire e formattare il testo degli articoli (rimozione ###, sottotitoli e grassetti)
 const renderFormattedText = (text: string): React.ReactNode[] => {
@@ -1318,12 +1319,15 @@ export default function FlipBook({
                               <div
                                 key={art.id}
                                 onClick={() => jumpToArticle(art.id)}
-                                className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                                className="group flex items-center justify-between cursor-pointer py-0.5"
                               >
-                                <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                                  {art.shortTitle || art.title}
-                                </span>
-                                <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                                <div className="flex items-center gap-2 truncate pr-2 min-w-0">
+                                  <ArticleStatusMarker aiMeta={art.aiMeta} title={art.title} />
+                                  <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate">
+                                    {art.shortTitle || art.title}
+                                  </span>
+                                </div>
+                                <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-2px] opacity-70 group-hover:border-amber-200" />
                                 <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
                                   {pageNum}
                                 </span>
@@ -1345,12 +1349,15 @@ export default function FlipBook({
                                   <div
                                     key={art.id}
                                     onClick={() => jumpToArticle(art.id)}
-                                    className="group flex items-baseline justify-between cursor-pointer py-0.5"
+                                    className="group flex items-center justify-between cursor-pointer py-0.5"
                                   >
-                                    <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate pr-2">
-                                      {art.shortTitle || art.title}
-                                    </span>
-                                    <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-4px] opacity-70 group-hover:border-amber-200" />
+                                    <div className="flex items-center gap-2 truncate pr-2 min-w-0">
+                                      <ArticleStatusMarker aiMeta={art.aiMeta} title={art.title} />
+                                      <span className="font-serif text-sm font-semibold text-white group-hover:text-amber-200 truncate">
+                                        {art.shortTitle || art.title}
+                                      </span>
+                                    </div>
+                                    <span className="flex-1 border-b-2 border-dotted border-white/40 mx-2 relative top-[-2px] opacity-70 group-hover:border-amber-200" />
                                     <span className="font-bold text-amber-300 font-sans text-xs sm:text-sm pl-1 shrink-0">
                                       {pageNum}
                                     </span>
@@ -1492,12 +1499,15 @@ export default function FlipBook({
                 {/* Se è il Foglio 1 dell'articolo, mostra Titolo, Estratto e Autore */}
                 {currentPage.sheetIndex === 1 ? (
                   <>
-                    <h1
-                      className="font-serif-title text-2xl sm:text-3xl md:text-4xl font-bold text-[#1F1713] text-center leading-tight mb-3"
-                      style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-                    >
-                      {currentPage.article.title}
-                    </h1>
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <ArticleStatusMarker aiMeta={currentPage.article.aiMeta} title={currentPage.article.title} size="md" />
+                      <h1
+                        className="font-serif-title text-2xl sm:text-3xl md:text-4xl font-bold text-[#1F1713] text-center leading-tight"
+                        style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                      >
+                        {currentPage.article.title}
+                      </h1>
+                    </div>
 
                     <p className="text-center italic text-[#57463B] text-sm sm:text-base max-w-xl mx-auto mb-4">
                       "{currentPage.article.excerpt}"
@@ -1820,89 +1830,120 @@ export default function FlipBook({
                 </div>
 
                 {/* Scheda Principale della Parola */}
-                <div className="bg-[#F6EFE5] rounded-xl p-5 sm:p-6 border-2 border-[#D5C7B5] shadow-md my-3 space-y-4">
-                  {/* Titolo e Pronuncia */}
-                  <div className="border-b border-[#D5C7B5] pb-3 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-serif text-2xl sm:text-3xl font-bold text-[#8A2520] tracking-wide">
-                          «{currentPage.word.word}»
-                        </span>
-                        {currentPage.word.phonetic && (
-                          <span className="text-xs font-sans text-[#786457] italic bg-[#EAE1D2] px-2 py-0.5 rounded">
-                            {currentPage.word.phonetic}
+                {(() => {
+                  const w = (currentPage.word as any) || {};
+                  const wordTitle = w.word || "";
+                  const phonetic = w.phonetic || w.pronunciation || "";
+                  const grammaticalClass = w.grammaticalClass || w.grammaticalCategory || "";
+                  const category = w.category || "";
+                  const etymology = w.etymology || "";
+                  const definition = w.definition || "";
+                  const nuanceAndUsage = w.nuanceAndUsage || w.nuancedUsage || "";
+
+                  let quoteText = "";
+                  let quoteAuthor = w.quoteAuthor || "";
+                  let quoteSource = w.quoteSource || "";
+
+                  if (typeof w.literaryQuote === "string") {
+                    quoteText = w.literaryQuote;
+                  } else if (typeof w.literaryQuote === "object" && w.literaryQuote !== null) {
+                    quoteText = w.literaryQuote.text || w.literaryQuote.quote || "";
+                    if (!quoteAuthor && w.literaryQuote.author) quoteAuthor = w.literaryQuote.author;
+                    if (!quoteSource && (w.literaryQuote.work || w.literaryQuote.workTitle || w.literaryQuote.source)) {
+                      quoteSource = w.literaryQuote.work || w.literaryQuote.workTitle || w.literaryQuote.source;
+                    }
+                  }
+
+                  const didYouKnow = w.didYouKnow || "";
+
+                  return (
+                    <div className="bg-[#F6EFE5] rounded-xl p-5 sm:p-6 border-2 border-[#D5C7B5] shadow-md my-3 space-y-4">
+                      {/* Titolo e Pronuncia */}
+                      <div className="border-b border-[#D5C7B5] pb-3 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-serif text-2xl sm:text-3xl font-bold text-[#8A2520] tracking-wide">
+                              «{wordTitle}»
+                            </span>
+                            {phonetic && (
+                              <span className="text-xs font-sans text-[#786457] italic bg-[#EAE1D2] px-2 py-0.5 rounded">
+                                {phonetic}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-sans text-[#5A4638] font-semibold mt-1">
+                            {grammaticalClass} {category && <>&bull; <span className="text-[#8A2520]">{category}</span></>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Griglia a 2 colonne: Etimologia & Definizione */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Box Etimologia */}
+                        <div className="bg-[#EFE8DC] p-3.5 rounded-lg border border-[#D5C7B5]/80 space-y-1.5 shadow-2xs">
+                          <div className="text-[11px] font-sans uppercase font-bold tracking-wider text-[#8A2520] flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-[#8A2520]" />
+                            <span>Etimologia & Origine Storica</span>
+                          </div>
+                          <p className="font-serif text-xs sm:text-[13px] leading-relaxed text-[#2A201A] text-justify">
+                            {etymology}
+                          </p>
+                        </div>
+
+                        {/* Box Definizione */}
+                        <div className="bg-[#EFE8DC] p-3.5 rounded-lg border border-[#D5C7B5]/80 space-y-1.5 shadow-2xs">
+                          <div className="text-[11px] font-sans uppercase font-bold tracking-wider text-[#8A2520] flex items-center gap-1.5">
+                            <BookMarked className="w-3.5 h-3.5 text-[#8A2520]" />
+                            <span>Definizione & Significato</span>
+                          </div>
+                          <p className="font-serif text-xs sm:text-[13px] leading-relaxed text-[#2A201A] text-justify">
+                            {definition}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Sfumature d'uso */}
+                      {nuanceAndUsage && (
+                        <div className="p-3.5 rounded-lg bg-amber-50/70 border border-amber-200/80 text-xs sm:text-[13px] font-serif text-[#2A201A] leading-relaxed">
+                          <span className="font-sans font-bold text-[#8A2520] uppercase text-[10px] tracking-wider block mb-1">
+                            — Come usarla con eleganza —
                           </span>
-                        )}
-                      </div>
-                      <div className="text-xs font-sans text-[#5A4638] font-semibold mt-1">
-                        {currentPage.word.grammaticalClass} &bull; <span className="text-[#8A2520]">{currentPage.word.category}</span>
-                      </div>
-                    </div>
-                  </div>
+                          {nuanceAndUsage}
+                        </div>
+                      )}
 
-                  {/* Griglia a 2 colonne: Etimologia & Definizione */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Box Etimologia */}
-                    <div className="bg-[#EFE8DC] p-3.5 rounded-lg border border-[#D5C7B5]/80 space-y-1.5 shadow-2xs">
-                      <div className="text-[11px] font-sans uppercase font-bold tracking-wider text-[#8A2520] flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-[#8A2520]" />
-                        <span>Etimologia & Origine Storica</span>
-                      </div>
-                      <p className="font-serif text-xs sm:text-[13px] leading-relaxed text-[#2A201A] text-justify">
-                        {currentPage.word.etymology}
-                      </p>
-                    </div>
+                      {/* Citazione d'autore nel contesto letterario */}
+                      {quoteText && (
+                        <div className="p-3.5 rounded-lg bg-[#2A201A] text-amber-100 shadow-inner">
+                          <div className="text-[10px] font-sans uppercase tracking-wider text-amber-300 font-bold mb-1">
+                            Nel Contesto Letterario & Saggistico
+                          </div>
+                          <p className="font-serif italic text-xs sm:text-[13px] leading-relaxed">
+                            «{quoteText}»
+                          </p>
+                          {(quoteAuthor || quoteSource) && (
+                            <div className="text-[10px] font-sans text-amber-200/80 text-right mt-1 font-medium">
+                              — {quoteAuthor} {quoteSource && `(${quoteSource})`}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                    {/* Box Definizione */}
-                    <div className="bg-[#EFE8DC] p-3.5 rounded-lg border border-[#D5C7B5]/80 space-y-1.5 shadow-2xs">
-                      <div className="text-[11px] font-sans uppercase font-bold tracking-wider text-[#8A2520] flex items-center gap-1.5">
-                        <BookMarked className="w-3.5 h-3.5 text-[#8A2520]" />
-                        <span>Definizione & Significato</span>
-                      </div>
-                      <p className="font-serif text-xs sm:text-[13px] leading-relaxed text-[#2A201A] text-justify">
-                        {currentPage.word.definition}
-                      </p>
+                      {/* Curiosità didYouKnow */}
+                      {didYouKnow && (
+                        <div className="p-3.5 rounded-lg bg-[#EFE8DC] border border-[#D5C7B5] flex items-start gap-2.5 text-xs font-serif text-[#4A3B2F] italic shadow-2xs">
+                          <Lightbulb className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                          <div className="leading-relaxed">
+                            <strong className="font-sans not-italic font-bold text-[#8A2520] text-[11px] block uppercase tracking-wider mb-0.5">
+                              Lo sapevate che?
+                            </strong>
+                            {didYouKnow}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-
-                  {/* Sfumature d'uso */}
-                  {currentPage.word.nuanceAndUsage && (
-                    <div className="p-3.5 rounded-lg bg-amber-50/70 border border-amber-200/80 text-xs sm:text-[13px] font-serif text-[#2A201A] leading-relaxed">
-                      <span className="font-sans font-bold text-[#8A2520] uppercase text-[10px] tracking-wider block mb-1">
-                        — Come usarla con eleganza —
-                      </span>
-                      {currentPage.word.nuanceAndUsage}
-                    </div>
-                  )}
-
-                  {/* Citazione d'autore nel contesto letterario */}
-                  {currentPage.word.literaryQuote && (
-                    <div className="p-3.5 rounded-lg bg-[#2A201A] text-amber-100 shadow-inner">
-                      <div className="text-[10px] font-sans uppercase tracking-wider text-amber-300 font-bold mb-1">
-                        Nel Contesto Letterario & Saggistico
-                      </div>
-                      <p className="font-serif italic text-xs sm:text-[13px] leading-relaxed">
-                        {currentPage.word.literaryQuote}
-                      </p>
-                      <div className="text-[10px] font-sans text-amber-200/80 text-right mt-1 font-medium">
-                        — {currentPage.word.quoteAuthor} {currentPage.word.quoteSource && `(${currentPage.word.quoteSource})`}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Curiosità didYouKnow */}
-                  {currentPage.word.didYouKnow && (
-                    <div className="p-3.5 rounded-lg bg-[#EFE8DC] border border-[#D5C7B5] flex items-start gap-2.5 text-xs font-serif text-[#4A3B2F] italic shadow-2xs">
-                      <Lightbulb className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                      <div className="leading-relaxed">
-                        <strong className="font-sans not-italic font-bold text-[#8A2520] text-[11px] block uppercase tracking-wider mb-0.5">
-                          Lo sapevate che?
-                        </strong>
-                        {currentPage.word.didYouKnow}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Numero di Pagina e Piede del Foglio */}

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import FlipBook from "./components/FlipBook";
 import { getMasterpieceForDayAndInterests, getArtworkMetadataForArticle, ArtMasterpiece } from "./data/artMasterpieces";
 import { DEFAULT_INTERESTS } from "./data/defaultInterests";
-import { InterestItem } from "./types";
+import { InterestItem, ArticleAiMeta } from "./types";
 import { generateFreshDailyArticles } from "./services/dailyArticleGenerator";
 import {
   isArticlePresentInDb,
@@ -48,6 +48,7 @@ export interface Article {
   artworkImageUrl?: string;
   artworkYear?: string;
   artworkMuseum?: string;
+  aiMeta?: ArticleAiMeta;
 }
 
 // Generazione e selezione deterministica per il quotidiano del giorno

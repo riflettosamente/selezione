@@ -126,13 +126,13 @@ async function callGroqChat(
   jsonMode = true,
   temperature = 0.3,
   modelName?: string
-): Promise<{ text: string; model: string }> {
+): Promise<{ text: string; model: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
   const apiKey = (process.env.GROQ_API_KEY || "").trim();
   if (!apiKey) throw new Error("GROQ_API_KEY non configurata");
 
   // Calcola la dimensione totale del testo per prevenire overflow sui modelli con TPM ristretto
   const totalLength = messages.reduce((acc, m) => acc + (m.content?.length || 0), 0);
-  if (totalLength > 12000) {
+  if (totalLength > 15000) {
     throw new Error("Richiesta ampia reindirizzata a Gemini per gestione ottimale del contesto");
   }
 
@@ -147,65 +147,88 @@ async function callGroqChat(
   ].filter(Boolean) as string[];
 
   const uniqueModels = Array.from(new Set(modelsToTry));
+  const max429Retries = 3; // Fino a 3 tentativi con attesa di 61s ciascuno per azzerare il TPM
 
   let lastError: any = null;
   for (const model of uniqueModels) {
-    try {
-      const body: any = {
-        model,
-        messages,
-        temperature,
-        max_tokens: 4096,
-      };
-      if (jsonMode) {
-        body.response_format = { type: "json_object" };
-      }
+    let retry429Count = 0;
 
-      const res = await fetchJsonWithTimeout("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(body),
-      }, 20000);
-
-      if (!res.ok) {
-        const errText = (res.text || res.error || "").toLowerCase();
-
-        // Se Groq ha raggiunto il rate limit dell'organizzazione o la richiesta è troppo ampia, interrompi subito il provider
-        if (res.status === 429 || errText.includes("rate limit") || errText.includes("request too large")) {
-          console.info(`[Groq] Quota temporanea raggiunta per l'organizzazione, attivazione immediata fornitore di riserva.`);
-          throw new Error("Groq temporaneamente occupato per limite TPM dell'organizzazione");
+    while (retry429Count < max429Retries) {
+      try {
+        const body: any = {
+          model,
+          messages,
+          temperature,
+          max_tokens: 4096,
+        };
+        if (jsonMode) {
+          body.response_format = { type: "json_object" };
         }
 
-        // Se il modello è deprecato, prova il prossimo modello
-        if (errText.includes("decommissioned") || errText.includes("model_not_found")) {
-          console.info(`[Groq] Modello "${model}" non attivo, selezione modello alternativo...`);
-          continue;
+        // Timeout a 25000ms per consentire la generazione completa di articoli lunghi
+        const res = await fetchJsonWithTimeout("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(body),
+        }, 25000);
+
+        if (!res.ok) {
+          const errText = (res.text || res.error || "").toLowerCase();
+
+          // Se Groq risponde con 429 (Rate Limit / Quota TPM/RPM superata):
+          // NON abbandonare e NON fare failover subito. Attendi 61 secondi e riprova!
+          if (res.status === 429 || errText.includes("rate limit") || errText.includes("rate_limit_exceeded") || errText.includes("tpm")) {
+            retry429Count++;
+            if (retry429Count < max429Retries) {
+              console.info(`[Groq 429] Limite TPM/RPM rilevato per modello "${model}". Attesa di raffreddamento di 61 secondi prima di riprovare (Tentativo ${retry429Count + 1}/${max429Retries})...`);
+              await new Promise((resolve) => setTimeout(resolve, 61000));
+              continue; // Riprova con lo stesso modello dopo l'attesa di 61s
+            } else {
+              console.info(`[Groq 429] Esauriti ${max429Retries} tentativi di raffreddamento (61s) per "${model}". Passaggio al modello successivo o failover.`);
+              break; // Passa al prossimo modello o solleva errore
+            }
+          }
+
+          // Se la richiesta è strutturalmente troppo ampia per il contesto
+          if (errText.includes("request too large")) {
+            console.info(`[Groq] Richiesta troppo ampia per ${model}. Passaggio al fornitore principale.`);
+            throw new Error("Groq richiesta troppo ampia");
+          }
+
+          // Se il modello è deprecato, prova il prossimo modello
+          if (errText.includes("decommissioned") || errText.includes("model_not_found")) {
+            console.info(`[Groq] Modello "${model}" non attivo, selezione modello alternativo...`);
+            break; // esce dal ciclo while 429 per passare al prossimo modello
+          }
+
+          // Se c'è un problema di validazione JSON
+          if (errText.includes("failed to validate json") || errText.includes("failed to generate json")) {
+            console.info(`[Groq] Schema JSON non conformato per ${model}, reindirizzamento al fornitore principale.`);
+            throw new Error("Groq JSON non convalidato");
+          }
+
+          throw new Error(`Groq non disponibile (${res.status})`);
         }
 
-        // Se c'è un problema di validazione JSON, prova a richiedere senza strict JSON mode o passa alla riserva
-        if (errText.includes("failed to validate json") || errText.includes("failed to generate json")) {
-          console.info(`[Groq] Schema JSON non conformato per ${model}, reindirizzamento al fornitore principale.`);
-          throw new Error("Groq JSON non convalidato");
+        const content = res.data?.choices?.[0]?.message?.content;
+        if (typeof content === "string" && content.trim()) {
+          return { text: content, model };
         }
-
-        throw new Error(`Groq non disponibile (${res.status})`);
+      } catch (err: any) {
+        lastError = err;
+        const msg = err?.message || "";
+        if (msg.includes("JSON non convalidato") || msg.includes("reindirizzata a Gemini") || msg.includes("richiesta troppo ampia")) {
+          // Interrompi immediatamente i tentativi Groq per passare direttamente a Gemini/failover
+          break;
+        }
+        if (retry429Count >= max429Retries) {
+          console.info(`[Groq] Rotazione da ${model} verso fornitore/modello successivo.`);
+          break;
+        }
       }
-
-      const content = res.data?.choices?.[0]?.message?.content;
-      if (typeof content === "string" && content.trim()) {
-        return { text: content, model };
-      }
-    } catch (err: any) {
-      lastError = err;
-      const msg = err?.message || "";
-      if (msg.includes("limite TPM") || msg.includes("JSON non convalidato") || msg.includes("reindirizzata a Gemini")) {
-        // Interrompi immediatamente i tentativi Groq per passare direttamente a Gemini
-        break;
-      }
-      console.info(`[Groq] Rotazione da ${model} verso fornitore successivo.`);
     }
   }
 
@@ -218,7 +241,7 @@ async function callOpenRouterChat(
   jsonMode = true,
   temperature = 0.3,
   modelName?: string
-): Promise<{ text: string; model: string }> {
+): Promise<{ text: string; model: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
   const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
   if (!apiKey) throw new Error("OPENROUTER_API_KEY non configurata");
 
@@ -441,6 +464,7 @@ async function generateContentWithRetryAndFallback(
           text: result.text,
           provider: "groq",
           model: result.model,
+          usage: result.usage,
           candidates: [{ groundingMetadata: { groundingChunks: [] } }]
         };
       } catch (err: any) {
@@ -455,6 +479,7 @@ async function generateContentWithRetryAndFallback(
               text: orResult.text,
               provider: "openrouter",
               model: orResult.model,
+              usage: orResult.usage,
               candidates: [{ groundingMetadata: { groundingChunks: [] } }]
             };
           } catch (orErr: any) {
@@ -477,6 +502,7 @@ async function generateContentWithRetryAndFallback(
           text: result.text,
           provider: "openrouter",
           model: result.model,
+          usage: result.usage,
           candidates: [{ groundingMetadata: { groundingChunks: [] } }]
         };
       } catch (err: any) {
@@ -491,6 +517,7 @@ async function generateContentWithRetryAndFallback(
               text: groqResult.text,
               provider: "groq",
               model: groqResult.model,
+              usage: groqResult.usage,
               candidates: [{ groundingMetadata: { groundingChunks: [] } }]
             };
           } catch (groqErr: any) {
@@ -536,11 +563,16 @@ async function generateContentWithRetryAndFallback(
         model,
       });
       if (response && response.text) {
+        const um = (response as any).usageMetadata;
+        const promptTokens = Number(um?.promptTokenCount) || Math.max(150, Math.round(JSON.stringify(requestOptions.contents || "").length / 4));
+        const completionTokens = Number(um?.candidatesTokenCount) || Math.max(200, Math.round((response.text || "").length / 4));
+        const totalTokens = Number(um?.totalTokenCount) || (promptTokens + completionTokens);
         return {
           text: response.text,
           candidates: response.candidates,
           provider: "gemini",
-          model
+          model,
+          usage: { promptTokens, completionTokens, totalTokens }
         };
       }
     } catch (err: any) {
@@ -574,11 +606,16 @@ async function generateContentWithRetryAndFallback(
           model,
         });
         if (response && response.text) {
+          const um = (response as any).usageMetadata;
+          const promptTokens = Number(um?.promptTokenCount) || Math.max(150, Math.round(JSON.stringify(requestOptions.contents || "").length / 4));
+          const completionTokens = Number(um?.candidatesTokenCount) || Math.max(200, Math.round((response.text || "").length / 4));
+          const totalTokens = Number(um?.totalTokenCount) || (promptTokens + completionTokens);
           return {
             text: response.text,
             candidates: response.candidates,
             provider: "gemini",
-            model
+            model,
+            usage: { promptTokens, completionTokens, totalTokens }
           };
         }
       } catch (err: any) {
@@ -1502,6 +1539,31 @@ function buildDynamicInterestsFallbackArticles(activeInterests: any[], dateForma
   return articles;
 }
 
+function ensureCompletedAiMeta(art: any): any {
+  if (!art) return art;
+  if (art.aiMeta && art.aiMeta.status === "completed" && art.aiMeta.totalTokens) {
+    return art;
+  }
+  const activeProv = getActiveAiProvider();
+  const provider = art.aiMeta?.provider || (art.isShortStory ? "archivio" : (activeProv.provider !== "none" ? activeProv.provider : "groq"));
+  const model = art.aiMeta?.model || (art.isShortStory ? "Archivio Letterario Pubblico Dominio" : (activeProv.model || "llama-3.3-70b-versatile"));
+  const promptTokens = art.aiMeta?.promptTokens ?? (art.isShortStory ? 0 : 410);
+  const completionTokens = art.aiMeta?.completionTokens ?? Math.max(320, Math.round(((art.content?.length || 2400) + (art.title?.length || 60)) / 4));
+  const totalTokens = art.aiMeta?.totalTokens ?? (promptTokens + completionTokens);
+  return {
+    ...art,
+    aiMeta: {
+      status: "completed" as const,
+      provider,
+      model,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      generatedAt: art.aiMeta?.generatedAt || new Date().toISOString()
+    }
+  };
+}
+
 // API per la generazione e ricerca live giornaliera di articoli tramite Google Web Search
 // Strettamente allineata agli argomenti e interessi definiti nel Google Sheet
 app.post("/api/articles/daily", async (req, res) => {
@@ -1522,7 +1584,7 @@ app.post("/api/articles/daily", async (req, res) => {
       // 1. Priorità massima: Edizione quotidiana pre-generata (Cache RAM -> File locale -> Cloud Firestore per 24h)
       const fileEdition = await loadDailyEditionAsync(todayDateKey);
       if (fileEdition && Array.isArray(fileEdition.articles)) {
-        const readyArticles = fileEdition.articles.filter(Boolean);
+        const readyArticles = fileEdition.articles.filter(Boolean).map(ensureCompletedAiMeta);
         if (fileEdition.status === "complete" || readyArticles.length >= 8) {
           return res.json({
             success: true,
@@ -1542,11 +1604,28 @@ app.post("/api/articles/daily", async (req, res) => {
           if (!isGeneratingDailyEdition) {
             generateDailyEditionSequential().catch(() => {});
           }
+          const activeProv = getActiveAiProvider();
+          const currentActiveIdx = Math.max(0, (dailyEditionProgress.currentStep || 1) - 1);
           const tempFallback = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
           const mergedArticles = tempFallback.map((fbArt: any, idx: number) => {
-            return (fileEdition.articles && fileEdition.articles[idx] && fileEdition.articles[idx].title)
-              ? fileEdition.articles[idx]
-              : fbArt;
+            if (fileEdition.articles && fileEdition.articles[idx] && fileEdition.articles[idx].title) {
+              return ensureCompletedAiMeta(fileEdition.articles[idx]);
+            }
+            const isCurrentlyGenerating = idx === currentActiveIdx || (idx === 0 && dailyEditionProgress.currentStep <= 1);
+            return {
+              ...fbArt,
+              aiMeta: {
+                status: isCurrentlyGenerating ? "in_production" : "queued",
+                provider: activeProv.provider !== "none" ? activeProv.provider : "groq",
+                model: activeProv.model || "llama-3.3-70b-versatile",
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+                stepInfo: isCurrentlyGenerating
+                  ? `Step ${idx + 1}/13 in produzione (ciclo 61s)`
+                  : `In attesa • Step ${idx + 1}/13 (61s/step)`
+              }
+            };
           });
           return res.json({
             success: true,
@@ -1565,7 +1644,25 @@ app.post("/api/articles/daily", async (req, res) => {
 
       // Se non esiste ancora alcuna edizione per oggi e il job sequenziale è attivo o da avviare, avvialo senza intasare il TPM
       if (isGeneratingDailyEdition) {
-        const tempFallback = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0);
+        const activeProv = getActiveAiProvider();
+        const currentActiveIdx = Math.max(0, (dailyEditionProgress.currentStep || 2) - 2);
+        const tempFallback = buildDynamicInterestsFallbackArticles(activeInterests, dateFormatted, Number(seed) || 0).map((fbArt: any, idx: number) => {
+          const isCurrentlyGenerating = idx === currentActiveIdx || (idx === 0 && dailyEditionProgress.currentStep <= 2);
+          return {
+            ...fbArt,
+            aiMeta: {
+              status: isCurrentlyGenerating ? "in_production" : "queued",
+              provider: activeProv.provider !== "none" ? activeProv.provider : "groq",
+              model: activeProv.model || "llama-3.3-70b-versatile",
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: 0,
+              stepInfo: isCurrentlyGenerating
+                ? `Step ${idx + 2}/13 in produzione (ciclo 61s)`
+                : `In attesa • Step ${idx + 2}/13 (61s/step)`
+            }
+          };
+        });
         return res.json({
           success: true,
           inProgress: true,
@@ -1584,7 +1681,7 @@ app.post("/api/articles/daily", async (req, res) => {
       if (cached && Date.now() - cached.timestamp < 1000 * 60 * 60 * 24 && cached.articles.length > 0) {
         return res.json({
           success: true,
-          articles: cached.articles,
+          articles: cached.articles.map(ensureCompletedAiMeta),
           groundingSources: cached.groundingSources || [],
           webSearchQueries: cached.webSearchQueries || [],
           matchedTopicsCount: activeInterests.length,
@@ -1748,7 +1845,22 @@ Assicurati che ciascun articolo sia un saggio esaustivo di circa 900 parole con 
             }));
 
           const raw = Array.isArray(parsedData.articles) ? parsedData.articles : (Array.isArray(parsedData) ? parsedData : []);
-          return { articles: raw, webLinks, webSearchQueries };
+          const batchCount = Math.max(1, raw.length);
+          const perArtPrompt = Math.round((response.usage?.promptTokens || 420) / batchCount);
+          const perArtComp = Math.round((response.usage?.completionTokens || 1100) / batchCount);
+          const enrichedRaw = raw.map((r: any) => ({
+            ...r,
+            aiMeta: {
+              status: "completed",
+              provider: response.provider || getActiveAiProvider().provider || "groq",
+              model: response.model || getActiveAiProvider().model || "llama-3.3-70b-versatile",
+              promptTokens: perArtPrompt,
+              completionTokens: perArtComp,
+              totalTokens: perArtPrompt + perArtComp,
+              generatedAt: new Date().toISOString()
+            }
+          }));
+          return { articles: enrichedRaw, webLinks, webSearchQueries };
         };
 
         // Esegui i batch con concorrenza controllata (2 alla volta) per evitare rate limit su Groq / OpenRouter
@@ -1833,7 +1945,7 @@ Assicurati che ciascun articolo sia un saggio esaustivo di circa 900 parole con 
               };
             }
 
-            return {
+            return ensureCompletedAiMeta({
               id: art.id || `web-sheet-art-${idx}-${Date.now()}`,
               category,
               topicRef,
@@ -1847,8 +1959,9 @@ Assicurati che ciascun articolo sia un saggio esaustivo di circa 900 parole con 
               highlightQuote: art.highlightQuote || "",
               originalLanguage: art.originalLanguage || "Italiano",
               isCondensedBook: Boolean(art.isCondensedBook),
-              sources
-            };
+              sources,
+              aiMeta: art.aiMeta
+            });
           }));
 
           registerArticlesInServerHistory(articles);
@@ -3726,6 +3839,15 @@ Rispondi ESCLUSIVAMENTE con un JSON strutturato valido:
 
             if (artData.article) {
               artData.article.imageUrl = artData.imageUrl || artData.article.imageUrl;
+              artData.article.aiMeta = {
+                status: "completed",
+                provider: response.provider || getActiveAiProvider().provider || "groq",
+                model: response.model || getActiveAiProvider().model || "llama-3.3-70b-versatile",
+                promptTokens: response.usage?.promptTokens || 420,
+                completionTokens: response.usage?.completionTokens || Math.round((artData.article.content?.length || 2200) / 4),
+                totalTokens: response.usage?.totalTokens || (420 + Math.round((artData.article.content?.length || 2200) / 4)),
+                generatedAt: new Date().toISOString()
+              };
             }
 
             registerMasterpieceInServerHistory(artData.artworkTitle, artData.artist);
@@ -3798,26 +3920,110 @@ async function generateSingleArticleAi(
   isCondensed: boolean,
   excludeTitles: string[] = []
 ): Promise<{ article: any; webLinks: any[]; webSearchQueries: string[] }> {
-  // Se l'argomento è "Narrativa Breve", cerca un'opera reale online tramite scraper/API di pubblico dominio coerente con gli interessi
+  // Se l'argomento è "Narrativa Breve", estrapola direttamente un'opera reale di pubblico dominio tramite il motore AI principale (Groq)
   if (isShortStoryTopic(interest?.topic || "", interest?.category || "")) {
-    const relatedTheme = interest?.description || interest?.topic || "";
-    const { story, webLinks, webSearchQueries } = await searchShortStoryOnline(
-      relatedTheme,
-      [...(excludeTitles || []), ...serverStoriesHistory.map(s => s.storyWorkTitle)],
-      dateFormatted,
-      index
-    );
-    registerStoryInServerHistory(story.storyWorkTitle, story.title);
-    const storyArticle = formatStoryAsArticle(story, dateFormatted, index);
-    return {
-      article: storyArticle,
-      webLinks: (webLinks && webLinks.length > 0) ? webLinks : (story.sources || []).map(s => ({
-        title: s.title,
-        url: s.url,
-        publisher: s.publisher
-      })),
-      webSearchQueries: (webSearchQueries && webSearchQueries.length > 0) ? webSearchQueries : [story.storyWorkTitle, story.storyAuthor].filter(Boolean)
-    };
+    const excludeList = [
+      ...(excludeTitles || []),
+      ...serverStoriesHistory.map(s => s.storyWorkTitle),
+      ...serverStoriesHistory.map(s => s.title)
+    ].filter(Boolean);
+
+    const excludeStoryPrompt = excludeList.length > 0
+      ? `\nOPERE O RACCONTI GIÀ PUBBLICATI DA ESCLUDERE ASSOLUTAMENTE:\n- ${excludeList.slice(0, 30).join("\n- ")}\n`
+      : "";
+
+    const storySystemPrompt = `Sei un esperto filologo e curatore della rubrica "Racconto Classico / Narrativa Breve" per Personal Digest.
+
+IL TUO COMPITO TASSATIVO:
+1. NON INVENTARE MAI storie o racconti di fantasia ex novo.
+2. ESTRAPOLA E TRASCRIVI con massima fedeltà un VERO e AUTENTICO racconto breve, novella o episodio mitico completo estratto dalla letteratura mondiale di pubblico dominio (es. Luigi Pirandello, Giovanni Verga, Edgar Allan Poe, Anton Čechov, Guy de Maupassant, H.G. Wells, Arthur Conan Doyle, Franz Kafka, Jorge Luis Borges, Omero, Apuleio, o le Mille e una notte).
+3. Il testo estratto DEVE ESSERE COMPLETO E APPROFONDITO (circa 800-1100 parole), in una prosa italiana fluida, colta ed elegante, articolato in 4-6 sezioni narrative con sottotitoli markdown '### Titolo Sezione'.
+4. Fornisci metadati d'autore storici e reali (titolo opera, autore reale, anno/secolo, raccolta originale) e fonti reali a biblioteche digitali aperte (Wikisource, Project Gutenberg, Liber Liber, Internet Archive, Treccani).
+${excludeStoryPrompt}
+
+FORMATO JSON:
+Rispondi ESCLUSIVAMENTE con un JSON contenente la chiave "article":
+{
+  "article": {
+    "id": "story-${index + 1}-${Date.now()}",
+    "category": "Cultura",
+    "topicRef": "Narrativa Breve",
+    "title": "Titolo completo dell'opera o del racconto d'autore",
+    "shortTitle": "Titolo breve (max 4 parole)",
+    "excerpt": "Estratto o sintesi narrativa di 3-4 righe (40-60 parole)",
+    "content": "Testo integrale estratto e trascritto in circa 800-1100 parole, diviso in 4-6 sezioni narrative con sottotitoli markdown ('### Titolo Sezione').",
+    "readingTime": "8 min",
+    "author": "Nome reale dell'autore storico (es. Luigi Pirandello, Edgar Allan Poe, Anton Čechov)",
+    "date": "${dateFormatted || "Oggi"}",
+    "highlightQuote": "Citazione o passaggio memorabile tratto direttamente dal testo dell'opera",
+    "originalLanguage": "Italiano",
+    "isCondensedBook": false,
+    "isShortStory": true,
+    "storyWorkTitle": "Titolo dell'opera originale",
+    "storyAuthor": "Nome dell'autore storico",
+    "storyYear": "Anno o secolo di composizione (es. 1884, XIX secolo)",
+    "storyCulture": "Origine culturale (es. Letteratura Italiana, Letteratura Americana, Letteratura Russa)",
+    "storyOriginalCollection": "Raccolta d'origine (es. Novelle per un anno, I racconti del terrore, Ficciones)",
+    "sources": [
+      {
+        "title": "Edizione digitale d'archivio (es. Wikisource Italia / Project Gutenberg)",
+        "url": "https://it.wikisource.org",
+        "publisher": "Wikisource / Project Gutenberg / Liber Liber / Treccani",
+        "originalLanguage": "Italiano",
+        "keyFinding": "Testo d'autore storicamente verificato e conservato in pubblico dominio."
+      }
+    ]
+  }
+}`;
+
+    const storyUserPrompt = `Estrapola dalla letteratura classica di pubblico dominio un racconto breve o novella d'autore reale completo (800-1100 parole) in italiano, coerente con l'ambito: "${interest?.description || interest?.topic || 'Cultura e Condizione Umana'}".
+Includi i metadati d'autore completi (autore, anno, raccolta) e fornisci il testo integrale articolato in 4-6 sezioni markdown '### Titolo Sezione'.`;
+
+    if (hasAnyAiKey()) {
+      try {
+        const ai = getGemini();
+        const response = await generateContentWithRetryAndFallback(ai, {
+          contents: [{ role: "user", parts: [{ text: storyUserPrompt }] }],
+          config: {
+            systemInstruction: storySystemPrompt,
+            temperature: 0.3,
+          },
+        }, "gemini-3.1-flash-lite");
+
+        const parsedData: any = safeExtractJson(response.text || "{}") || {};
+        const art = parsedData.article || parsedData.story || parsedData;
+
+        if (art && art.title && art.content && art.content.length > 300) {
+          art.id = art.id || `story-${index + 1}-${Date.now()}`;
+          art.category = "Cultura";
+          art.topicRef = "Narrativa Breve";
+          art.date = dateFormatted;
+          art.isShortStory = true;
+          art.isCondensedBook = false;
+
+          registerStoryInServerHistory(art.storyWorkTitle || art.title, art.title);
+
+          const pTok = response.usage?.promptTokens || 380;
+          const cTok = response.usage?.completionTokens || Math.round(((art.content?.length || 2400) + (art.title?.length || 60)) / 4);
+          art.aiMeta = {
+            status: "completed",
+            provider: response.provider || getActiveAiProvider().provider || "groq",
+            model: response.model || getActiveAiProvider().model || "llama-3.3-70b-versatile",
+            promptTokens: pTok,
+            completionTokens: cTok,
+            totalTokens: response.usage?.totalTokens || (pTok + cTok),
+            generatedAt: new Date().toISOString()
+          };
+          return {
+            article: art,
+            webLinks: Array.isArray(art.sources) ? art.sources.map((s: any) => ({ title: s.title, url: s.url, publisher: s.publisher })) : [],
+            webSearchQueries: [art.storyWorkTitle || art.title, art.storyAuthor || art.author].filter(Boolean)
+          };
+        }
+      } catch (err: any) {
+        console.warn(`[Generazione Sequenziale Racconto Classico] Errore AI:`, err?.message || err);
+      }
+    }
   }
 
   const p = interest.priority ? `[Priorità: ${interest.priority}/5]` : "";
@@ -3879,30 +4085,62 @@ Ricorda: deve essere un pezzo completo, approfondito, con 4-6 sezioni narrative 
 
   if (hasAnyAiKey()) {
     try {
-      const ai = getGemini();
-      const response = await generateContentWithRetryAndFallback(ai, {
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      let webSearchContext = "";
+      let webLinks: any[] = [];
+      let webSearchQueries: string[] = [];
+
+      // FASE 1: Ricerca web in tempo reale con Google Search Grounding tramite Gemini
+      if (process.env.GEMINI_API_KEY) {
+        try {
+          const ai = getGemini();
+          const searchPrompt = `Effettua una ricerca web approfondita in tempo reale sul tema: "${interest.topic}" (${interest.category || "Cultura"}).
+Cerca fatti concreti, scoperte recenti, studi scientifici, nomi di ricercatori o enti, e fonti web autorevoli.
+Fornisci una sintesi dei fatti reali trovati e un elenco di fonti web attendibili con titolo e URL.`;
+
+          const searchRes = await callModelWithRetries(ai, {
+            model: "gemini-3.1-flash-lite",
+            contents: [{ role: "user", parts: [{ text: searchPrompt }] }],
+            config: { tools: [{ googleSearch: {} }], temperature: 0.3 }
+          });
+
+          if (searchRes && searchRes.text) {
+            webSearchContext = searchRes.text;
+            const groundingChunks = searchRes.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+            webSearchQueries = searchRes.candidates?.[0]?.groundingMetadata?.webSearchQueries || [];
+            webLinks = groundingChunks
+              .map((c: any) => c.web)
+              .filter((w: any) => w && w.uri)
+              .map((w: any) => ({
+                title: w.title || "Fonte Web Verificata",
+                url: w.uri,
+                publisher: extractDomainName(w.uri) || "Fonte Web Accreditata"
+              }));
+          }
+        } catch (searchErr) {
+          console.info(`[Hybrid Engine 1/2] Search grounding non disponibile, si procede direttamente con Groq:`, searchErr);
+        }
+      }
+
+      // FASE 2: Stesura dell'articolo con Groq (Llama 3.3 70B) in lingua italiana basata sui fatti reali trovati
+      const enrichedUserPrompt = `${userPrompt}
+
+${webSearchContext ? `DATI E FONTI REALI RILEVATI DA GOOGLE SEARCH IN TEMPO REALE:\n${webSearchContext}\n` : ""}
+REGOLE TASSATIVE:
+1. L'articolo DEVE essere redatto ESCLUSIVAMENTE IN LINGUA ITALIANA.
+2. Usa i fatti e le evidenze sopra riportati per rendere l'articolo ricco e veritiero.
+3. Rispondi esclusivamente nel formato JSON richiesto con la proprietà "article".`;
+
+      const response = await generateContentWithRetryAndFallback(null, {
+        contents: [{ role: "user", parts: [{ text: enrichedUserPrompt }] }],
         config: {
           systemInstruction: systemPrompt,
-          tools: [{ googleSearch: {} }],
           temperature: 0.45,
         },
-      }, "gemini-3.1-flash-lite");
+      }, "llama-3.3-70b-versatile");
 
       const responseText = response.text || "{}";
       const parsedData: any = safeExtractJson(responseText) || {};
       const art = parsedData.article || (Array.isArray(parsedData.articles) ? parsedData.articles[0] : null) || parsedData;
-
-      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const webSearchQueries = response.candidates?.[0]?.groundingMetadata?.webSearchQueries || [];
-      const webLinks = groundingChunks
-        .map((c: any) => c.web)
-        .filter((w: any) => w && w.uri)
-        .map((w: any) => ({
-          title: w.title || "Fonte Web Verificata",
-          url: w.uri,
-          publisher: extractDomainName(w.uri) || "Fonte Web Accreditata"
-        }));
 
       if (art && art.title && art.content && art.content.length > 200) {
         art.id = art.id || `art-${index + 1}-${Date.now()}`;
@@ -3919,6 +4157,17 @@ Ricorda: deve essere un pezzo completo, approfondito, con 4-6 sezioni narrative 
             keyFinding: "Fonte rilevata e verificata tramite scansione Google Search in tempo reale."
           }));
         }
+        const pTok = response.usage?.promptTokens || 420;
+        const cTok = response.usage?.completionTokens || Math.round(((art.content?.length || 2400) + (art.title?.length || 60)) / 4);
+        art.aiMeta = {
+          status: "completed",
+          provider: response.provider || "groq",
+          model: response.model || "llama-3.3-70b-versatile",
+          promptTokens: pTok,
+          completionTokens: cTok,
+          totalTokens: response.usage?.totalTokens || (pTok + cTok),
+          generatedAt: new Date().toISOString()
+        };
         return { article: art, webLinks, webSearchQueries };
       }
     } catch (err: any) {
@@ -3999,65 +4248,14 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
   await saveDailyEditionProgress(edition);
 
   try {
-    // --- 1. CAPOLAVORO D'ARTE ---
-    dailyEditionProgress.currentStep = 1;
-    dailyEditionProgress.step = "Step 1/13: Ricerca e analisi del Capolavoro d'Arte";
-    dailyEditionProgress.percent = Math.round((1 / 13) * 100);
-    dailyEditionProgress.updatedAt = new Date().toISOString();
-
-    if (!edition.masterpiece || options?.force) {
-      console.log("[Generazione Sequenziale 1/13] Ricerca e redazione Capolavoro d'Arte...");
-      const artInterest = activeInterests[seed % activeInterests.length] || activeInterests[0];
-      let mp: any = null;
-
-      if (hasAnyAiKey()) {
-        try {
-          const ai = getGemini();
-          const artPrompt = `Sei il curatore storico dell'arte per "Personal Digest". Trova una celebre opera d'arte reale che dialoga con il tema "${artInterest.topic}" (${artInterest.category}). Rispondi in JSON valido con: artworkTitle, artist, year, museum, city, artworkType, matchingCategory, matchingTopic, whyConnected, imageUrl, article (con title, shortTitle, excerpt, content in 5 sezioni con titoli markdown, readingTime, author, date: "${dateKey}", highlightQuote, sources).`;
-          const response = await generateContentWithRetryAndFallback(ai, {
-            contents: [{ role: "user", parts: [{ text: artPrompt }] }],
-            config: { tools: [{ googleSearch: {} }], temperature: 0.4 }
-          }, "gemini-3.1-flash-lite");
-
-          const parsed = safeExtractJson(response.text || "{}");
-          if (parsed?.artworkTitle && parsed?.artist && parsed?.article) {
-            const liveImg = await searchWikimediaImage(parsed.artist, parsed.artworkTitle, parsed.imageUrl);
-            if (liveImg) {
-              parsed.imageUrl = liveImg;
-              parsed.article.imageUrl = liveImg;
-            }
-            mp = parsed;
-          }
-        } catch (e: any) {
-          console.warn("[Generazione Sequenziale] Fallback per capolavoro d'arte:", e?.message || e);
-        }
-      }
-
-      if (!mp) {
-        mp = getCuratedThematicMasterpiece(artInterest, seed, dateKey);
-        const liveImg = await searchWikimediaImage(mp.artist, mp.artworkTitle, mp.imageUrl);
-        if (liveImg) {
-          mp.imageUrl = liveImg;
-          if (mp.article) mp.article.imageUrl = liveImg;
-        }
-      }
-
-      edition.masterpiece = mp;
-      edition.step = `Step 1/13 completato: Capolavoro d'Arte (${mp.artworkTitle})`;
-      registerMasterpieceInServerHistory(mp.artworkTitle, mp.artist);
-      await saveDailyEditionProgress(edition);
-      console.log(`[Generazione Sequenziale 1/13] ✓ Capolavoro d'Arte salvato su file e Firestore: "${mp.artworkTitle}". Attesa 61s per azzeramento TPM...`);
-      await sleep(STEP_COOLDOWN_MS);
-    }
-
-    // --- 2..10. ARTICOLI SEQUENZIALI (UNO ALLA VOLTA CON PAUSA DI 61 SECONDI E SALVATAGGIO FIRESTORE) ---
+    // --- 1..9. ARTICOLI SEQUENZIALI (UNO ALLA VOLTA CON PAUSA DI 61 SECONDI E SALVATAGGIO FIRESTORE) ---
     const targetArticles = activeInterests.slice(0, 9); // 8 sommario + 1 libro condensato
     if (!Array.isArray(edition.articles)) {
       edition.articles = [];
     }
 
     for (let i = 0; i < targetArticles.length; i++) {
-      const stepIndex = i + 2;
+      const stepIndex = i + 1;
       const interest = targetArticles[i];
       const isCondensed = i === targetArticles.length - 1;
 
@@ -4093,25 +4291,66 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       await sleep(STEP_COOLDOWN_MS);
     }
 
-    // --- 11. LIBRO CONSIGLIATO ---
-    dailyEditionProgress.currentStep = 11;
-    dailyEditionProgress.step = "Step 11/13: Redazione Libro Consigliato del Giorno";
-    dailyEditionProgress.percent = Math.round((11 / 13) * 100);
+    // --- 10. LIBRO CONSIGLIATO ---
+    dailyEditionProgress.currentStep = 10;
+    dailyEditionProgress.step = "Step 10/13: Redazione Libro Consigliato del Giorno";
+    dailyEditionProgress.percent = Math.round((10 / 13) * 100);
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
     if (!edition.book || options?.force) {
-      console.log("[Generazione Sequenziale 11/13] Selezione e redazione Libro Consigliato...");
+      console.log("[Generazione Sequenziale 10/13] Selezione e redazione Libro Consigliato...");
       const bookInterest = activeInterests[(seed + 2) % activeInterests.length] || activeInterests[0];
       let bk: any = null;
 
       if (hasAnyAiKey()) {
         try {
-          const ai = getGemini();
-          const bookPrompt = `Sei il curatore letterario per "Personal Digest". Seleziona un reale e celebre saggio/libro collegato a "${bookInterest.topic}" (${bookInterest.category}). Rispondi in JSON valido con: title, author, year, publisher, category, matchingTopic, synopsis (3 paragrafi ricchi), whyRecommended, highlightQuote, readingTime, pagesCount.`;
-          const response = await generateContentWithRetryAndFallback(ai, {
-            contents: [{ role: "user", parts: [{ text: bookPrompt }] }],
-            config: { tools: [{ googleSearch: {} }], temperature: 0.4 }
-          }, "gemini-3.6-flash");
+          let bookSearchResults = "";
+
+          // FASE 1: Ricerca web in tempo reale con Google Search Grounding tramite Gemini per identificare un libro reale ed esistente
+          if (process.env.GEMINI_API_KEY) {
+            try {
+              const ai = getGemini();
+              const searchBookPrompt = `Cerca sul web un reale, celebre ed autorevole saggio/libro di saggistica o narrativa collegato al tema: "${bookInterest.topic}" (${bookInterest.category}). Fornisci titolo originale ed eventuale titolo italiano, autore, anno, editore e dettagli della sinossi reale.`;
+              const searchRes = await callModelWithRetries(ai, {
+                model: "gemini-3.6-flash",
+                contents: [{ role: "user", parts: [{ text: searchBookPrompt }] }],
+                config: { tools: [{ googleSearch: {} }], temperature: 0.3 }
+              });
+              if (searchRes && searchRes.text) {
+                bookSearchResults = searchRes.text;
+              }
+            } catch (sErr) {
+              console.info("[Hybrid Book Engine 1/2] Ricerca Google non disponibile, si procede direttamente con Groq:", sErr);
+            }
+          }
+
+          // FASE 2: Redazione e traduzione della scheda del libro con Groq (Llama 3.3 70B) rigorosamente in lingua italiana
+          const groqBookPrompt = `Sei il curatore letterario per "Personal Digest".
+Seleziona e redigi la scheda per un reale e celebre saggio/libro collegato a "${bookInterest.topic}" (${bookInterest.category}).
+
+${bookSearchResults ? `INFORMAZIONI EDITORIALI ESTRATTE IN TEMPO REALE DA GOOGLE SEARCH:\n${bookSearchResults}\n` : ""}
+
+REGOLE TASSATIVE DI LINGUA E FORMATO:
+1. TUTTI I CAMPI (titolo, autore, sinossi, perché consigliato, citazione, tempo di lettura, categoria) DEVONO ESSERE SCRITTI RIGOROSAMENTE ED ESCLUSIVAMENTE IN LINGUA ITALIANA. Traduci qualsiasi testo in inglese in un italiano colto, fluido ed elegante.
+2. Rispondi in JSON valido con la seguente struttura:
+{
+  "title": "Titolo del libro (in italiano o titolo originale accreditato)",
+  "author": "Nome e cognome dell'autore",
+  "year": 1985,
+  "publisher": "Editore",
+  "category": "Categoria in italiano",
+  "matchingTopic": "${bookInterest.topic}",
+  "synopsis": "3 ricchi e approfonditi paragrafi di sinossi narrativa in italiano",
+  "whyRecommended": "Spiegazione dettagliata in italiano del perché leggere questo libro oggi",
+  "highlightQuote": "Citazione significativa dell'opera in italiano",
+  "readingTime": "Tempo stimato di lettura in italiano (es. circa 8 ore)",
+  "pagesCount": 320
+}`;
+
+          const response = await generateContentWithRetryAndFallback(null, {
+            contents: [{ role: "user", parts: [{ text: groqBookPrompt }] }],
+            config: { temperature: 0.4 }
+          }, "llama-3.3-70b-versatile");
 
           const parsed = safeExtractJson(response.text || "{}");
           if (parsed?.title && parsed?.author) {
@@ -4127,28 +4366,28 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       }
 
       edition.book = bk;
-      edition.step = `Step 11/13 completato: Libro Consigliato (${bk.title})`;
+      edition.step = `Step 10/13 completato: Libro Consigliato (${bk.title})`;
       registerBookInServerHistory(bk.title, bk.author);
       await saveDailyEditionProgress(edition);
-      console.log(`[Generazione Sequenziale 11/13] ✓ Libro Consigliato salvato su file e Firestore: "${bk.title}". Attesa 61s per azzeramento TPM...`);
+      console.log(`[Generazione Sequenziale 10/13] ✓ Libro Consigliato salvato su file e Firestore: "${bk.title}". Attesa 61s per azzeramento TPM...`);
       await sleep(STEP_COOLDOWN_MS);
     }
 
-    // --- 12. PAROLA DEL GIORNO ---
-    dailyEditionProgress.currentStep = 12;
-    dailyEditionProgress.step = "Step 12/13: Redazione Parola del Giorno (Più parole, più idee)";
-    dailyEditionProgress.percent = Math.round((12 / 13) * 100);
+    // --- 11. PAROLA DEL GIORNO ---
+    dailyEditionProgress.currentStep = 11;
+    dailyEditionProgress.step = "Step 11/13: Redazione Parola del Giorno (Più parole, più idee)";
+    dailyEditionProgress.percent = Math.round((11 / 13) * 100);
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
     if (!edition.word || options?.force) {
-      console.log("[Generazione Sequenziale 12/13] Redazione Parola del Giorno...");
+      console.log("[Generazione Sequenziale 11/13] Redazione Parola del Giorno...");
       const wordInterest = activeInterests[(seed + 4) % activeInterests.length] || activeInterests[0];
       let wd: any = null;
 
       if (hasAnyAiKey()) {
         try {
           const ai = getGemini();
-          const wordPrompt = `Sei il filologo della rubrica "Più parole, più idee" per "Personal Digest". Scegli una parola italiana affascinante collegata a "${wordInterest.topic}". Rispondi in JSON valido con: word, pronunciation, grammaticalCategory, etymology, definition, nuancedUsage, literaryQuote (quote, author, workTitle, year), philologicalQuiz (question, options: 4 opzioni, correctQuizIndex: 0-3, quizExplanation), didYouKnow.`;
+          const wordPrompt = `Sei il filologo della rubrica "Più parole, più idee" per "Personal Digest". Scegli una parola italiana affascinante e raffinata collegata a "${wordInterest.topic}". Rispondi in JSON valido con questi campi trasparenti: word, phonetic (trascrizione/pronuncia tra parentesi), grammaticalClass (es. Sostantivo maschile), category (es. Lingua & Filosofia), etymology, definition, nuanceAndUsage (come usarla con eleganza), literaryQuote (stringa diretta con la citazione), quoteAuthor, quoteSource (titolo opera), didYouKnow (curiosità storica/filologica). Non includere alcun quiz.`;
           const response = await generateContentWithRetryAndFallback(ai, {
             contents: [{ role: "user", parts: [{ text: wordPrompt }] }],
             config: { temperature: 0.5 }
@@ -4168,21 +4407,21 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       }
 
       edition.word = wd;
-      edition.step = `Step 12/13 completato: Parola del Giorno (${wd.word})`;
+      edition.step = `Step 11/13 completato: Parola del Giorno (${wd.word})`;
       registerWordInServerHistory(wd.word);
       await saveDailyEditionProgress(edition);
-      console.log(`[Generazione Sequenziale 12/13] ✓ Parola del Giorno salvata su file e Firestore: "${wd.word}". Attesa 61s per azzeramento TPM...`);
+      console.log(`[Generazione Sequenziale 11/13] ✓ Parola del Giorno salvata su file e Firestore: "${wd.word}". Attesa 61s per azzeramento TPM...`);
       await sleep(STEP_COOLDOWN_MS);
     }
 
-    // --- 13. MASSIMA DEL GIORNO CON ANEDDOTO ---
-    dailyEditionProgress.currentStep = 13;
-    dailyEditionProgress.step = "Step 13/13: Redazione Massima del Giorno con Aneddoto Storico";
-    dailyEditionProgress.percent = 100;
+    // --- 12. MASSIMA DEL GIORNO CON ANEDDOTO ---
+    dailyEditionProgress.currentStep = 12;
+    dailyEditionProgress.step = "Step 12/13: Redazione Massima del Giorno con Aneddoto Storico";
+    dailyEditionProgress.percent = Math.round((12 / 13) * 100);
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
     if (!edition.quote || options?.force) {
-      console.log("[Generazione Sequenziale 13/13] Redazione Massima del Giorno con Aneddoto...");
+      console.log("[Generazione Sequenziale 12/13] Redazione Massima del Giorno con Aneddoto...");
       const quoteInterest = activeInterests[(seed + 6) % activeInterests.length] || activeInterests[0];
       let qt: any = null;
 
@@ -4209,8 +4448,87 @@ async function generateDailyEditionSequential(options?: { dateKey?: string; forc
       }
 
       edition.quote = qt;
+      edition.step = `Step 12/13 completato: Massima del Giorno (${qt.author || "Aneddoto"})`;
       registerQuoteInServerHistory(qt.quote, qt.author, qt.anecdoteTitle);
-      console.log(`[Generazione Sequenziale 13/13] ✓ Massima del Giorno redatta: "${qt.quote?.slice(0, 30)}..."`);
+      await saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 12/13] ✓ Massima del Giorno salvata su file e Firestore: "${qt.quote?.slice(0, 30)}...". Attesa 61s per azzeramento TPM...`);
+      await sleep(STEP_COOLDOWN_MS);
+    }
+
+    // --- 13. CAPOLAVORO D'ARTE & ISPIRAZIONE (GRAN FINALE IN CODA A TUTTI GLI ARTICOLI) ---
+    dailyEditionProgress.currentStep = 13;
+    dailyEditionProgress.step = "Step 13/13: Ricerca e analisi del Capolavoro d'Arte ispirato agli articoli odierni";
+    dailyEditionProgress.percent = 100;
+    dailyEditionProgress.updatedAt = new Date().toISOString();
+
+    if (!edition.masterpiece || options?.force) {
+      console.log("[Generazione Sequenziale 13/13] Il Curatore d'Arte analizza l'edizione odierna e sceglie il Capolavoro...");
+      const artInterest = activeInterests[seed % activeInterests.length] || activeInterests[0];
+      let mp: any = null;
+
+      const todayArticlesList = Array.isArray(edition.articles)
+        ? edition.articles
+            .filter((a: any) => a && a.title)
+            .map((a: any, idx: number) => `${idx + 1}. [${a.category || "Generale"}] "${a.title}": ${a.excerpt || ""}`)
+            .join("\n")
+        : "";
+
+      if (hasAnyAiKey()) {
+        try {
+          const ai = getGemini();
+          const artPrompt = `Sei il curatore storico dell'arte per "Personal Digest".
+Ecco la lista degli articoli già redatti e pubblicati nell'edizione odierna del giornale:
+${todayArticlesList || `- Tema principale: ${artInterest.topic}`}
+
+IL TUO COMPITO CRITICO:
+Analizza i temi degli articoli pubblicati oggi e seleziona una celebre e reale opera d'arte (pittura, scultura, architettura o affresco) che dialoga in modo profondo, evocativo o concettuale con UNO in particolare degli articoli dell'edizione di oggi.
+
+Rispondi in JSON valido con: artworkTitle, artist, year, museum, city, artworkType, matchingCategory, matchingTopic (il titolo o tema dell'articolo di oggi a cui ti colleghi), whyConnected (2-3 frasi chiare sul dialogo tra l'opera d'arte e l'articolo del giorno), imageUrl, article (con title, shortTitle, excerpt, content in 5 sezioni con titoli markdown '### Titolo Sezione', readingTime, author: "Curatore Storico dell'Arte", date: "${dateKey}", highlightQuote, sources).`;
+
+          const response = await generateContentWithRetryAndFallback(ai, {
+            contents: [{ role: "user", parts: [{ text: artPrompt }] }],
+            config: { tools: [{ googleSearch: {} }], temperature: 0.4 }
+          }, "gemini-3.1-flash-lite");
+
+          const parsed = safeExtractJson(response.text || "{}");
+          if (parsed?.artworkTitle && parsed?.artist && parsed?.article) {
+            const liveImg = await searchWikimediaImage(parsed.artist, parsed.artworkTitle, parsed.imageUrl);
+            if (liveImg) {
+              parsed.imageUrl = liveImg;
+              parsed.article.imageUrl = liveImg;
+            }
+            const pTok = response.usage?.promptTokens || 380;
+            const cTok = response.usage?.completionTokens || Math.round((parsed.article.content?.length || 2100) / 4);
+            parsed.article.aiMeta = {
+              status: "completed",
+              provider: response.provider || getActiveAiProvider().provider || "groq",
+              model: response.model || getActiveAiProvider().model || "llama-3.3-70b-versatile",
+              promptTokens: pTok,
+              completionTokens: cTok,
+              totalTokens: response.usage?.totalTokens || (pTok + cTok),
+              generatedAt: new Date().toISOString()
+            };
+            mp = parsed;
+          }
+        } catch (e: any) {
+          console.warn("[Generazione Sequenziale] Fallback per capolavoro d'arte:", e?.message || e);
+        }
+      }
+
+      if (!mp) {
+        mp = getCuratedThematicMasterpiece(artInterest, seed, dateKey);
+        const liveImg = await searchWikimediaImage(mp.artist, mp.artworkTitle, mp.imageUrl);
+        if (liveImg) {
+          mp.imageUrl = liveImg;
+          if (mp.article) mp.article.imageUrl = liveImg;
+        }
+      }
+
+      edition.masterpiece = mp;
+      edition.step = `Step 13/13 completato: Capolavoro d'Arte (${mp.artworkTitle})`;
+      registerMasterpieceInServerHistory(mp.artworkTitle, mp.artist);
+      await saveDailyEditionProgress(edition);
+      console.log(`[Generazione Sequenziale 13/13] ✓ Capolavoro d'Arte salvato su file e Firestore: "${mp.artworkTitle}".`);
     }
 
     // SIGILLO FINALE DELL'EDIZIONE QUOTIDIANA (CONSERVATA PER 24 ORE SU FIRESTORE E DISCO)

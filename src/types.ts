@@ -7,6 +7,17 @@ export interface SourceReference {
   authorsOrInstitution?: string;
 }
 
+export interface ArticleAiMeta {
+  status: "completed" | "in_production" | "queued";
+  provider?: string;
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  generatedAt?: string;
+  stepInfo?: string;
+}
+
 export interface Article {
   id: string;
   pageNumber: number;
@@ -35,6 +46,7 @@ export interface Article {
   artworkImageUrl?: string;
   artworkYear?: string;
   artworkMuseum?: string;
+  aiMeta?: ArticleAiMeta;
 }
 
 export interface InterestItem {
@@ -83,14 +95,17 @@ export interface RecommendedBook {
 export interface DailyWord {
   word: string;
   phonetic?: string;
-  grammaticalClass: string;
-  category: string;
+  pronunciation?: string;
+  grammaticalClass?: string;
+  grammaticalCategory?: string;
+  category?: string;
   matchingTopic?: string;
   etymology: string;
   definition: string;
-  nuanceAndUsage: string;
-  literaryQuote: string;
-  quoteAuthor: string;
+  nuanceAndUsage?: string;
+  nuancedUsage?: string;
+  literaryQuote?: string | { text?: string; quote?: string; author?: string; work?: string; source?: string };
+  quoteAuthor?: string;
   quoteSource?: string;
   quizQuestion?: string;
   quizOptions?: string[];
