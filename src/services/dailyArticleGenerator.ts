@@ -600,5 +600,12 @@ export function generateFreshDailyArticles(
     }
   });
 
+  if (generatedArticles.length > 1 && !generatedArticles.some((a) => a.isCondensedBook)) {
+    generatedArticles[generatedArticles.length - 1] = {
+      ...generatedArticles[generatedArticles.length - 1],
+      isCondensedBook: true
+    };
+  }
+
   return generatedArticles;
 }

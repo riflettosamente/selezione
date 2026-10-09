@@ -91,6 +91,12 @@ function computeDailyArticles(
     baseArticles = generateFreshDailyArticles(userInterests, daySeed, dateFormatted, coverStory.id);
   }
 
+    if (!baseArticles.some(a => a.isCondensedBook) && baseArticles.length > 1) {
+      baseArticles = baseArticles.map((a, idx) =>
+        idx === baseArticles.length - 1 ? { ...a, isCondensedBook: true } : a
+      );
+    }
+
   // Unione: Capolavoro d'Arte + Articoli del Sommario + Eventuali Articoli personalizzati
   const combined = [coverStory, ...baseArticles.filter(a => a.id !== coverStory.id), ...customArticles];
 
@@ -114,7 +120,7 @@ export default function App() {
       const saved = localStorage.getItem(`personal_digest_daily_articles_${todayKey}`);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 8) {
+        if (Array.isArray(parsed) && parsed.length >= 9 && parsed.some((a: any) => a && a.isCondensedBook)) {
           return parsed;
         }
       }
@@ -128,7 +134,7 @@ export default function App() {
       const saved = localStorage.getItem(`personal_digest_daily_articles_${todayKey}`);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 8) {
+        if (Array.isArray(parsed) && parsed.length >= 9 && parsed.some((a: any) => a && a.isCondensedBook)) {
           return "success";
         }
       }
@@ -361,7 +367,7 @@ export default function App() {
       const saved = localStorage.getItem(todayArticlesKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 8) {
+        if (Array.isArray(parsed) && parsed.length >= 9 && parsed.some((a: any) => a && a.isCondensedBook)) {
           setLiveWebArticles(parsed);
           const savedQueries = localStorage.getItem(todayQueriesKey);
           if (savedQueries) {

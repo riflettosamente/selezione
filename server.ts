@@ -767,19 +767,34 @@ function cleanupExpiredLocalEditions(currentDateKey?: string) {
   }
 }
 
+function ensureCondensedArticleInEdition(edition: any): any {
+  if (edition && Array.isArray(edition.articles) && edition.articles.length >= 9) {
+    if (!edition.articles.some((a: any) => a && a.isCondensedBook)) {
+      edition.articles[edition.articles.length - 1] = {
+        ...edition.articles[edition.articles.length - 1],
+        isCondensedBook: true
+      };
+    }
+  }
+  return edition;
+}
+
 function loadDailyEdition(dateKey?: string): any | null {
   const key = dateKey || new Date().toISOString().slice(0, 10);
   
   // 1. Check in-memory cache prima di ogni cosa
   if (memoryEditionsCache.has(key)) {
-    return memoryEditionsCache.get(key);
+    const cached = memoryEditionsCache.get(key);
+    if (cached && Array.isArray(cached.articles) && cached.articles.some((a: any) => a && a.isCondensedBook)) {
+      return cached;
+    }
   }
 
   try {
     const datedFile = getDailyEditionFilePath(key);
     if (fs.existsSync(datedFile)) {
       const content = fs.readFileSync(datedFile, "utf-8");
-      const parsed = JSON.parse(content);
+      const parsed = ensureCondensedArticleInEdition(JSON.parse(content));
       if (parsed) {
         if (parsed.status === "complete") {
           memoryEditionsCache.set(key, parsed);
@@ -790,7 +805,7 @@ function loadDailyEdition(dateKey?: string): any | null {
     const todayAlias = getTodayAliasFilePath();
     if (fs.existsSync(todayAlias)) {
       const content = fs.readFileSync(todayAlias, "utf-8");
-      const parsed = JSON.parse(content);
+      const parsed = ensureCondensedArticleInEdition(JSON.parse(content));
       if (parsed && (parsed.date === key || !dateKey)) {
         if (parsed.status === "complete") {
           memoryEditionsCache.set(key, parsed);
@@ -818,7 +833,8 @@ async function loadDailyEditionAsync(dateKey?: string): Promise<any | null> {
 
   // Se locale mancante o incompleto (es. Render dopo lo sleep/spin-down o durante gli step), controlliamo Firestore
   try {
-    const cloudEdition = await loadDailyEditionFromFirestore(key);
+    const rawCloudEdition = await loadDailyEditionFromFirestore(key);
+    const cloudEdition = ensureCondensedArticleInEdition(rawCloudEdition);
     if (cloudEdition) {
       if (cloudEdition.status === "complete") {
         memoryEditionsCache.set(key, cloudEdition);
@@ -1584,8 +1600,13 @@ app.post("/api/articles/daily", async (req, res) => {
       // 1. Priorità massima: Edizione quotidiana pre-generata (Cache RAM -> File locale -> Cloud Firestore per 24h)
       const fileEdition = await loadDailyEditionAsync(todayDateKey);
       if (fileEdition && Array.isArray(fileEdition.articles)) {
-        const readyArticles = fileEdition.articles.filter(Boolean).map(ensureCompletedAiMeta);
-        if (fileEdition.status === "complete" || readyArticles.length >= 8) {
+        let readyArticles = fileEdition.articles.filter(Boolean).map(ensureCompletedAiMeta);
+        if (readyArticles.length >= 9 && !readyArticles.some((a: any) => a.isCondensedBook)) {
+          readyArticles = readyArticles.map((a: any, idx: number) =>
+            idx === readyArticles.length - 1 ? { ...a, isCondensedBook: true } : a
+          );
+        }
+        if (fileEdition.status === "complete" || readyArticles.length >= 9) {
           return res.json({
             success: true,
             articles: readyArticles,
@@ -2847,17 +2868,40 @@ app.post(["/api/quote/daily", "/api/anecdote/daily"], async (req, res) => {
 
     if (hasAnyAiKey() && activeInterests.length > 0) {
       try {
-        const ai = getGemini();
         const sorted = [...activeInterests].sort((a, b) => (b.priority || 3) - (a.priority || 3));
         const selectedInterest = sorted[effectiveIndex % sorted.length] || sorted[0];
 
-        const prompt = `Sei il curatore letterario e redattore capo della celebre rubrica di chiusura "La Massima del Giorno" e del relativo articolo saggio «Aneddoto del Giorno» per la prestigiosa rivista d'autore "Personal Digest / Selezione".
+        let quoteSearchResults = "";
+
+        // FASE 1: Ricerca web in tempo reale con Google Search Grounding tramite Gemini per identificare una massima e un aneddoto storico autentici
+        if (process.env.GEMINI_API_KEY) {
+          try {
+            const ai = getGemini();
+            const searchQuotePrompt = `Cerca sul web una celebre ed autentica massima o aforisma d'autore (filosofo, scienziato, storico, scrittore o statista) accompagnata da un documentato e affascinante aneddoto o episodio storico reale collegato al tema: "${selectedInterest.topic}" (${selectedInterest.category}).
+Fornisci la citazione esatta, autore autentico, fonte/opera o diario originale, e i dettagli storici documentati (luoghi, date, circostanze e protagonisti) dell'aneddoto.`;
+            const searchRes = await callModelWithRetries(ai, {
+              model: "gemini-3.6-flash",
+              contents: [{ role: "user", parts: [{ text: searchQuotePrompt }] }],
+              config: { tools: [{ googleSearch: {} }], temperature: 0.3 }
+            });
+            if (searchRes && searchRes.text) {
+              quoteSearchResults = searchRes.text;
+            }
+          } catch (sErr) {
+            console.info("[Hybrid Quote API 1/2] Ricerca Google non disponibile, si procede direttamente con Groq:", sErr);
+          }
+        }
+
+        // FASE 2: Redazione narrativa di alto profilo con Groq (Llama 3.3 70B) rigorosamente in lingua italiana
+        const groqQuotePrompt = `Sei il curatore letterario e redattore capo della celebre rubrica di chiusura "La Massima del Giorno" e del relativo articolo saggio «Aneddoto del Giorno» per la prestigiosa rivista d'autore "Personal Digest / Selezione".
 
 L'edizione odierna approfondisce tra i suoi temi di riferimento:
 - Categoria: "${selectedInterest.category}"
 - Argomento culturale: "${selectedInterest.topic}"
 - Descrizione: "${selectedInterest.description || 'Approfondimento umanistico, scientifico, storico ed etico'}"
 ${excludeDirective}
+
+${quoteSearchResults ? `INFORMAZIONI STORICHE ESTRATTE IN TEMPO REALE DA GOOGLE SEARCH:\n${quoteSearchResults}\n` : ""}
 
 Il tuo compito è creare due contenuti d'eccellenza, profondamente collegati nello spirito ma distinti nella forma:
 
@@ -2874,7 +2918,9 @@ Il tuo compito è creare due contenuti d'eccellenza, profondamente collegati nel
   * Paragrafo 2: L'ostacolo critico, il momento di svolta, il dilemma umano o l'intuizione imprevista.
   * Paragrafo 3: L'esito storico documentato, l'impatto culturale o scientifico e la risonanza morale con la Massima del Giorno.
 
-Rispondi ESCLUSIVAMENTE con un JSON valido con questa struttura:
+REGOLE TASSATIVE DI LINGUA E FORMATO:
+1. TUTTI I CAMPI DEVONO ESSERE SCRITTI RIGOROSAMENTE IN LINGUA ITALIANA colta, elegante e scorrevole.
+2. Rispondi ESCLUSIVAMENTE con un JSON valido con questa struttura:
 {
   "quote": "«Testo della massima in italiano tra virgolette caporali...»",
   "author": "Nome dell'autore (es. Seneca, Marie Curie, Leonardo da Vinci, Confucio, Albert Einstein, Virginia Woolf, Blaise Pascal, ecc.)",
@@ -2885,13 +2931,12 @@ Rispondi ESCLUSIVAMENTE con un JSON valido con questa struttura:
   "matchingTopic": "${selectedInterest.topic}"
 }`;
 
-        const response = await generateContentWithRetryAndFallback(ai, {
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        const response = await generateContentWithRetryAndFallback(null, {
+          contents: [{ role: "user", parts: [{ text: groqQuotePrompt }] }],
           config: {
-            tools: [{ googleSearch: {} }],
-            temperature: 0.5,
+            temperature: 0.4,
           },
-        }, "gemini-3.6-flash");
+        }, "llama-3.3-70b-versatile");
 
         const text = response.text || "{}";
         const quoteData = safeExtractJson(text);
@@ -4421,21 +4466,64 @@ REGOLE TASSATIVE DI LINGUA E FORMATO:
     dailyEditionProgress.updatedAt = new Date().toISOString();
 
     if (!edition.quote || options?.force) {
-      console.log("[Generazione Sequenziale 12/13] Redazione Massima del Giorno con Aneddoto...");
+      console.log("[Generazione Sequenziale 12/13] Ricerca e redazione Massima del Giorno con Aneddoto...");
       const quoteInterest = activeInterests[(seed + 6) % activeInterests.length] || activeInterests[0];
       let qt: any = null;
 
       if (hasAnyAiKey()) {
         try {
-          const ai = getGemini();
-          const quotePrompt = `Sei il curatore della rubrica "La Massima del Giorno" per "Personal Digest". Fornisci una celebre massima con aneddoto storico ispirata a "${quoteInterest.topic}". Rispondi in JSON valido con: quote, author, authorRole, lifeSpan, context, reflection, anecdoteTitle, anecdote, practicalApplication.`;
-          const response = await generateContentWithRetryAndFallback(ai, {
-            contents: [{ role: "user", parts: [{ text: quotePrompt }] }],
-            config: { temperature: 0.5 }
-          }, "gemini-3.6-flash");
+          let quoteSearchResults = "";
+
+          // FASE 1: Ricerca web in tempo reale con Google Search Grounding tramite Gemini per identificare una massima e un aneddoto storico autentici
+          if (process.env.GEMINI_API_KEY) {
+            try {
+              const ai = getGemini();
+              const searchQuotePrompt = `Cerca sul web una celebre ed autentica massima o aforisma d'autore (filosofo, scienziato, storico, scrittore o statista) accompagnata da un documentato e affascinante aneddoto o episodio storico reale collegato al tema: "${quoteInterest.topic}" (${quoteInterest.category}).
+Fornisci la citazione esatta, autore autentico, fonte/opera o diario originale, e i dettagli storici documentati (luoghi, date, circostanze e protagonisti) dell'aneddoto.`;
+              const searchRes = await callModelWithRetries(ai, {
+                model: "gemini-3.6-flash",
+                contents: [{ role: "user", parts: [{ text: searchQuotePrompt }] }],
+                config: { tools: [{ googleSearch: {} }], temperature: 0.3 }
+              });
+              if (searchRes && searchRes.text) {
+                quoteSearchResults = searchRes.text;
+              }
+            } catch (sErr) {
+              console.info("[Hybrid Quote Engine 1/2] Ricerca Google non disponibile, si procede direttamente con Groq:", sErr);
+            }
+          }
+
+          // FASE 2: Redazione narrativa di alto profilo con Groq (Llama 3.3 70B) rigorosamente in lingua italiana
+          const groqQuotePrompt = `Sei il curatore letterario e redattore capo della rubrica "La Massima del Giorno" e del relativo articolo "Aneddoto del Giorno" per la rivista d'autore "Personal Digest".
+Seleziona e redigi la massima e l'aneddoto storico collegati al tema: "${quoteInterest.topic}" (${quoteInterest.category}).
+
+${quoteSearchResults ? `INFORMAZIONI STORICHE ESTRATTE IN TEMPO REALE DA GOOGLE SEARCH:\n${quoteSearchResults}\n` : ""}
+
+REGOLE TASSATIVE DI LINGUA E FORMATO:
+1. TUTTI I CAMPI DEVONO ESSERE SCRITTI RIGOROSAMENTE IN LINGUA ITALIANA colta, elegante e scorrevole.
+2. La massima deve essere autentica, racchiusa tra virgolette caporali «...».
+3. L'aneddoto deve essere una narrazione storica accurata e avvincente di 3 paragrafi completi (circa 250-350 parole totali, separati tassativamente da \\n\\n):
+   - Paragrafo 1: Contestualizzazione storica vivida, ambientazione temporale e geografica.
+   - Paragrafo 2: L'ostacolo critico, il momento di svolta o l'intuizione decisiva.
+   - Paragrafo 3: L'esito documentato, l'impatto storico e la risonanza morale con la Massima.
+4. Rispondi ESCLUSIVAMENTE in JSON valido con la seguente struttura:
+{
+  "quote": "«Testo della massima in italiano tra virgolette caporali...»",
+  "author": "Nome e cognome dell'autore",
+  "source": "Opera, saggio, diario o contesto d'origine della citazione",
+  "anecdoteTitle": "Titolo narrativo, accattivante ed esatto dell'aneddoto storico",
+  "anecdote": "Primo paragrafo con contesto storico, date e ambientazione.\\n\\nSecondo paragrafo con la sfida o l'evento decisivo.\\n\\nTerzo paragrafo con l'impatto storico e la risonanza morale con la massima.",
+  "category": "${quoteInterest.category}",
+  "matchingTopic": "${quoteInterest.topic}"
+}`;
+
+          const response = await generateContentWithRetryAndFallback(null, {
+            contents: [{ role: "user", parts: [{ text: groqQuotePrompt }] }],
+            config: { temperature: 0.4 }
+          }, "llama-3.3-70b-versatile");
 
           const parsed = safeExtractJson(response.text || "{}");
-          if (parsed?.quote && parsed?.anecdote) {
+          if (parsed?.quote && parsed?.anecdote && parsed?.author) {
             qt = parsed;
           }
         } catch (e: any) {
